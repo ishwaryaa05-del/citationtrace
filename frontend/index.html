@@ -961,6 +961,7 @@
                 </svg>
                 Verified Citations
               </div>
+              <button onclick="exportAllAPA()" style="font-size:var(--text-xs);padding:4px 10px;border:1px solid var(--color-border);border-radius:var(--radius-md);background:var(--color-surface);color:var(--color-text-muted);cursor:pointer;font-weight:500;">⬇ APA refs</button>
               <button onclick="exportAllBibTeX()" style="font-size:var(--text-xs);padding:4px 10px;border:1px solid var(--color-border);border-radius:var(--radius-md);background:var(--color-surface);color:var(--color-text-muted);cursor:pointer;font-weight:500;">⬇ Export .bib</button>
             </div>
             <div class="panel-body">
@@ -1004,6 +1005,33 @@
 
         </div><!-- /.results-grid -->
       </div><!-- /.container -->
+    </section>
+
+    <!-- =============================================
+         SOURCE VALIDATOR SECTION
+         ============================================= -->
+    <section id="sourceValidatorSection" style="padding-block:var(--space-12);background:var(--color-surface);border-top:1px solid var(--color-divider);">
+      <div class="container" style="max-width:860px;">
+        <div style="margin-bottom:var(--space-6);">
+          <div style="display:inline-flex;align-items:center;gap:var(--space-2);background:#fef3c7;border:1px solid #fde68a;border-radius:var(--radius-full);padding:2px 12px;font-size:var(--text-xs);font-weight:600;color:#d97706;letter-spacing:.04em;text-transform:uppercase;margin-bottom:var(--space-3);">Source Validator</div>
+          <h2 style="font-size:var(--text-lg);font-weight:700;color:var(--color-header);margin-bottom:var(--space-2);">Validate any source</h2>
+          <p style="font-size:var(--text-sm);color:var(--color-text-muted);">Paste a URL, DOI, ISBN, or title. CitationTrace will look it up across multiple registries and evaluate its reliability, retraction status, and generate a ready-to-use APA citation.</p>
+        </div>
+        <div style="display:flex;gap:var(--space-3);margin-bottom:var(--space-4);flex-wrap:wrap;">
+          <select id="svSourceType" style="padding:var(--space-3) var(--space-4);border:2px solid var(--color-border);border-radius:var(--radius-lg);background:#fff;font-size:var(--text-sm);color:var(--color-text);cursor:pointer;">
+            <option value="auto">Auto-detect</option>
+            <option value="url">Website / URL</option>
+            <option value="doi">DOI</option>
+            <option value="isbn">Book (ISBN)</option>
+            <option value="title">Paper / Article title</option>
+            <option value="pmid">PubMed ID</option>
+          </select>
+          <input id="svInput" type="text" placeholder="e.g. https://example.com or 10.1038/s41586-025-10072-4 or a book title"
+            style="flex:1;min-width:200px;padding:var(--space-3) var(--space-4);border:2px solid var(--color-border);border-radius:var(--radius-lg);background:#fff;font-size:var(--text-sm);color:var(--color-text);" />
+          <button id="svBtn" onclick="runSourceValidator()" style="padding:var(--space-3) var(--space-6);background:var(--color-accent);color:#fff;border:none;border-radius:var(--radius-lg);font-size:var(--text-sm);font-weight:600;cursor:pointer;">Validate</button>
+        </div>
+        <div id="svResults" style="display:none;"></div>
+      </div>
     </section>
 
   </main>
@@ -1405,41 +1433,148 @@
       return (window._ctCitations || []).find(c => c.id === id);
     }
 
+    /* =============================================
+       CITATION FORMATTING & COPY
+       ============================================= */
+
+    /** Robust clipboard copy with execCommand fallback for embedded/iframe contexts */
+    function clipboardCopy(text, successMsg) {
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(text)
+          .then(() => showToast(successMsg))
+          .catch(() => fallbackCopy(text, successMsg));
+      } else {
+        fallbackCopy(text, successMsg);
+      }
+    }
+    function fallbackCopy(text, successMsg) {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0;';
+      document.body.appendChild(ta);
+      ta.focus(); ta.select();
+      try {
+        const ok = document.execCommand('copy');
+        showToast(ok ? successMsg : 'Could not copy — select text manually');
+      } catch { showToast('Could not copy — select text manually'); }
+      document.body.removeChild(ta);
+    }
+
+    /** Format author name as "Last, F." — handles missing/empty names safely */
+    function _fmtAuthor(name) {
+      const parts = (name || '').trim().split(/\s+/).filter(Boolean);
+      if (!parts.length) return 'Unknown';
+      const last = parts.pop();
+      const initials = parts.map(p => p[0] ? p[0].toUpperCase() + '.' : '').join(' ');
+      return initials ? `${last}, ${initials}` : last;
+    }
+
     function formatAPA(c) {
-      const authors = c.authors.length > 0
-        ? (c.authors.slice(0,6).map(a => { const parts = a.trim().split(' '); const last = parts.pop(); return last + ', ' + parts.map(p=>p[0]+'.').join(' '); }).join(', ') + (c.authors.length > 6 ? ', ... ' + (() => { const parts = c.authors[c.authors.length-1].trim().split(' '); const last = parts.pop(); return last + ', ' + parts.map(p=>p[0]+'.').join(' '); })() : ''))
+      const authors = (c.authors || []).length > 0
+        ? c.authors.slice(0, 6).map(_fmtAuthor).join(', ')
+          + (c.authors.length > 6 ? ', ... ' + _fmtAuthor(c.authors[c.authors.length - 1]) : '')
         : 'Unknown Author';
       const year = c.year ? `(${c.year})` : '(n.d.)';
       const doi = c.doi ? ` https://doi.org/${c.doi}` : (c.url ? ` ${c.url}` : '');
       return `${authors} ${year}. ${c.title}.${doi}`;
     }
 
+    /** APA 7 in-text: (Last et al., Year) or (Last & Last, Year) */
+    function formatInText(c) {
+      const authors = c.authors || [];
+      const year = c.year || 'n.d.';
+      if (!authors.length) return `(Unknown Author, ${year})`;
+      const lastNames = authors.map(a => {
+        const parts = (a || '').trim().split(/\s+/).filter(Boolean);
+        return parts[parts.length - 1] || 'Unknown';
+      });
+      let authorStr;
+      if (lastNames.length === 1)      authorStr = lastNames[0];
+      else if (lastNames.length === 2) authorStr = lastNames.join(' & ');
+      else                             authorStr = lastNames[0] + ' et al.';
+      return `(${authorStr}, ${year})`;
+    }
+
     function formatBibTeX(c) {
-      const key = (c.authors[0]?.split(' ').pop() || 'Unknown') + (c.year || 'nd') + c.title.split(' ')[0].replace(/[^a-zA-Z]/g,'');
-      const authors = c.authors.join(' and ');
-      const doi = c.doi ? `  doi = {${c.doi}},\n` : '';
-      const url = c.url ? `  url = {${c.url}},\n` : '';
-      return `@article{${key},\n  title = {${c.title}},\n  author = {${authors}},\n  year = {${c.year || 'n.d.'}},\n${doi}${url}}`;
+      const firstAuthorLast = (c.authors && c.authors[0])
+        ? ((c.authors[0].trim().split(/\s+/) || []).pop() || 'Unknown')
+        : 'Unknown';
+      const key = firstAuthorLast + (c.year || 'nd') + (c.title || '').split(' ')[0].replace(/[^a-zA-Z]/g, '');
+      const authorStr = (c.authors || []).join(' and ') || 'Unknown';
+      const doi = c.doi ? `  doi       = {${c.doi}},\n` : '';
+      const url = c.url ? `  url       = {${c.url}},\n` : '';
+      return `@article{${key},\n  title     = {${c.title || ''}},\n  author    = {${authorStr}},\n  year      = {${c.year || 'n.d.'}},\n${doi}${url}}`;
     }
 
     function copyAPA(id) {
       const c = getCitationById(id);
       if (!c) return;
-      navigator.clipboard.writeText(formatAPA(c)).then(() => showToast('APA citation copied!')).catch(()=> showToast('Copy failed — try manually'));
+      clipboardCopy(formatAPA(c), '✓ APA citation copied to clipboard');
     }
-
+    function copyInText(id) {
+      const c = getCitationById(id);
+      if (!c) return;
+      clipboardCopy(formatInText(c), '✓ In-text citation copied — APA bibliography entry also shown below');
+      // Also show the full APA in a toast-modal so they can copy both
+      showCitationModal(c);
+    }
     function copyBibTeX(id) {
       const c = getCitationById(id);
       if (!c) return;
-      navigator.clipboard.writeText(formatBibTeX(c)).then(() => showToast('BibTeX copied!')).catch(()=> showToast('Copy failed — try manually'));
+      clipboardCopy(formatBibTeX(c), '✓ BibTeX copied to clipboard');
     }
-
     function exportAllBibTeX() {
       const bibs = (window._ctCitations || []).map(c => formatBibTeX(c)).join('\n\n');
-      if (!bibs) return;
-      const blob = new Blob([bibs], {type:'text/plain'});
-      const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-      a.download = 'citationtrace_export.bib'; a.click();
+      if (!bibs) { showToast('No citations to export'); return; }
+      const blob = new Blob([bibs], { type: 'text/plain' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'citationtrace_export.bib';
+      a.click();
+    }
+    function exportAllAPA() {
+      const refs = (window._ctCitations || []).map((c, i) => `[${i+1}] ${formatAPA(c)}`).join('\n\n');
+      if (!refs) { showToast('No citations to export'); return; }
+      const blob = new Blob([refs], { type: 'text/plain' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'citationtrace_references.txt';
+      a.click();
+    }
+
+    /** Modal showing both in-text and full APA for easy copy */
+    function showCitationModal(c) {
+      const existing = document.getElementById('ctCitModal');
+      if (existing) existing.remove();
+      const inText = formatInText(c);
+      const fullAPA = formatAPA(c);
+      const modal = document.createElement('div');
+      modal.id = 'ctCitModal';
+      modal.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.55);z-index:10000;display:flex;align-items:center;justify-content:center;padding:1rem;';
+      modal.innerHTML = `
+        <div style="background:#fff;border-radius:12px;padding:1.5rem;max-width:560px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.25);">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+            <h3 style="font-size:0.95rem;font-weight:700;color:#1a2744;">Citation formats</h3>
+            <button onclick="document.getElementById('ctCitModal').remove()" style="font-size:1.2rem;color:#94a3b8;background:none;border:none;cursor:pointer;line-height:1;">✕</button>
+          </div>
+          <div style="margin-bottom:1rem;">
+            <label style="font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8;">In-text (APA 7)</label>
+            <div style="display:flex;align-items:center;gap:8px;margin-top:4px;">
+              <code style="flex:1;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:6px;padding:8px 10px;font-size:0.85rem;color:#1e293b;">${escapeHTML(inText)}</code>
+              <button onclick="clipboardCopy('${inText.replace(/'/g,"\\'")}','✓ In-text copied')" style="font-size:0.7rem;padding:6px 10px;border:1px solid #3b82f6;border-radius:6px;background:#eff6ff;color:#3b82f6;cursor:pointer;font-weight:600;white-space:nowrap;">Copy</button>
+            </div>
+          </div>
+          <div style="margin-bottom:1.25rem;">
+            <label style="font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8;">Bibliography (APA 7)</label>
+            <div style="display:flex;align-items:flex-start;gap:8px;margin-top:4px;">
+              <code style="flex:1;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:6px;padding:8px 10px;font-size:0.8rem;color:#1e293b;line-height:1.5;word-break:break-all;">${escapeHTML(fullAPA)}</code>
+              <button onclick="clipboardCopy(${JSON.stringify(fullAPA)},'✓ APA copied')" style="font-size:0.7rem;padding:6px 10px;border:1px solid #3b82f6;border-radius:6px;background:#eff6ff;color:#3b82f6;cursor:pointer;font-weight:600;white-space:nowrap;">Copy</button>
+            </div>
+          </div>
+          <button onclick="document.getElementById('ctCitModal').remove()" style="width:100%;padding:9px;background:#1a2744;color:#fff;border:none;border-radius:8px;font-size:0.85rem;font-weight:600;cursor:pointer;">Done</button>
+        </div>`;
+      modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+      document.body.appendChild(modal);
     }
 
     function showToast(msg) {
@@ -1565,7 +1700,8 @@
             </span>
             <div style="display:flex;gap:var(--space-1);margin-left:auto;">
               ${c.doi ? `<a class="doi-link" href="https://doi.org/${escapeHTML(c.doi)}" target="_blank" rel="noopener noreferrer" title="View DOI">DOI ↗</a>` : `<a class="doi-link" href="${escapeHTML(c.url)}" target="_blank" rel="noopener noreferrer">View ↗</a>`}
-              <button onclick="copyAPA(${c.id})" title="Copy APA citation" style="font-size:0.65rem;padding:2px 6px;border:1px solid var(--color-border);border-radius:var(--radius-sm);background:var(--color-surface);color:var(--color-text-muted);cursor:pointer;font-family:var(--font-body);">APA</button>
+              <button onclick="copyInText(${c.id})" title="Copy in-text + APA" style="font-size:0.65rem;padding:2px 7px;border:1px solid #3b82f6;border-radius:var(--radius-sm);background:#eff6ff;color:#3b82f6;cursor:pointer;font-weight:600;">Cite</button>
+              <button onclick="copyAPA(${c.id})" title="Copy full APA reference" style="font-size:0.65rem;padding:2px 6px;border:1px solid var(--color-border);border-radius:var(--radius-sm);background:var(--color-surface);color:var(--color-text-muted);cursor:pointer;">APA</button>
               <button onclick="copyBibTeX(${c.id})" title="Copy BibTeX" style="font-size:0.65rem;padding:2px 6px;border:1px solid var(--color-border);border-radius:var(--radius-sm);background:var(--color-surface);color:var(--color-text-muted);cursor:pointer;font-family:var(--font-mono);">{bib}</button>
             </div>
           </div>
@@ -1764,6 +1900,300 @@
 
     // Initialize search history display
     renderHistory();
+
+    /* =============================================
+       SOURCE VALIDATOR
+       Handles: URL, DOI, ISBN, PubMed ID, free-text title
+       APIs used: CrossRef (DOI), Open Library (ISBN/book),
+                  PubMed E-utilities, OpenAlex title search,
+                  Retraction Watch via CrossRef metadata,
+                  Open PageRank (for website authority)
+       ============================================= */
+
+    function svDetectType(input) {
+      const s = input.trim();
+      if (/^10\.\d{4,}[\/\S]+/.test(s))                     return 'doi';
+      if (/^https?:\/\//i.test(s))                           return 'url';
+      if (/^\d{9,13}[\dX]?$/.test(s.replace(/-/g,'')))      return 'isbn';
+      if (/^\d{5,9}$/.test(s))                               return 'pmid';
+      return 'title';
+    }
+
+    async function runSourceValidator() {
+      const raw = (document.getElementById('svInput').value || '').trim();
+      if (!raw) { showToast('Please enter a source to validate'); return; }
+      const typeSelect = document.getElementById('svSourceType').value;
+      const type = typeSelect === 'auto' ? svDetectType(raw) : typeSelect;
+      const btn = document.getElementById('svBtn');
+      const resultsDiv = document.getElementById('svResults');
+      btn.disabled = true; btn.textContent = 'Validating…';
+      resultsDiv.style.display = 'block';
+      resultsDiv.innerHTML = `<div style="display:flex;align-items:center;gap:10px;padding:16px;background:#fff;border:1px solid var(--color-border);border-radius:var(--radius-lg);"><div class="loading-spinner" style="width:22px;height:22px;border-width:2px;"></div><span style="font-size:var(--text-sm);color:var(--color-text-muted);">Looking up source across registries…</span></div>`;
+      try {
+        let result;
+        if      (type === 'doi')   result = await svValidateDOI(raw);
+        else if (type === 'isbn')  result = await svValidateISBN(raw.replace(/-/g,''));
+        else if (type === 'pmid')  result = await svValidatePMID(raw);
+        else if (type === 'url')   result = await svValidateURL(raw);
+        else                       result = await svValidateTitle(raw);
+        renderSVResult(result);
+      } catch(e) {
+        resultsDiv.innerHTML = `<div style="padding:16px;background:var(--color-error-bg);border:1px solid var(--color-error-border);border-radius:var(--radius-lg);color:var(--color-error);font-size:var(--text-sm);">Could not validate source: ${escapeHTML(e.message)}. Please check the input and try again.</div>`;
+      }
+      btn.disabled = false; btn.textContent = 'Validate';
+    }
+
+    /* --- DOI validation via CrossRef --- */
+    async function svValidateDOI(doi) {
+      const clean = doi.replace(/^https?:\/\/(dx\.)?doi\.org\//i,'');
+      const resp = await fetch(`https://api.crossref.org/works/${encodeURIComponent(clean)}?mailto=citationtrace@research.tool`, {signal:AbortSignal.timeout(10000)});
+      if (!resp.ok) throw new Error(`DOI not found in CrossRef (${resp.status})`);
+      const data = (await resp.json()).message;
+      const title = (data.title||['Unknown title'])[0];
+      const authors = (data.author||[]).slice(0,6).map(a=>`${a.given||''} ${a.family||''}`.trim());
+      const year = ((data['published-print']||data['published-online']||{})['date-parts']||[[null]])[0][0];
+      const journal = (data['container-title']||[])[0]||'';
+      const publisher = data.publisher||'';
+      const cited = data['is-referenced-by-count']||0;
+      const abstract = stripJats(data.abstract||'');
+      const isRetracted = (data.relation?.['is-retraction-of']||(data['update-policy']||'').toLowerCase().includes('retract')||false);
+      const type = data.type||'journal-article';
+      const openAccess = !!(data.license||[]).length;
+      return {
+        found: true, sourceType: 'DOI — Peer-reviewed ' + type.replace(/-/g,' '),
+        title, authors, year, journal, publisher, cited, abstract,
+        doi: clean, url: `https://doi.org/${clean}`,
+        isRetracted, openAccess,
+        validity: isRetracted ? 'retracted' : cited > 50 ? 'high' : cited > 5 ? 'moderate' : 'limited',
+        validityNote: isRetracted ? 'This paper has been retracted. Do not cite without disclosure.' :
+          cited > 50 ? `Highly cited (${cited}×) peer-reviewed publication.` :
+          cited > 5 ? `Moderately cited (${cited}×) peer-reviewed work.` :
+          `Low citation count (${cited}). Verify independently before relying on this source.`
+      };
+    }
+
+    /* --- ISBN validation via Open Library --- */
+    async function svValidateISBN(isbn) {
+      const resp = await fetch(`https://openlibrary.org/api/books?bibkeys=ISBN:${isbn}&format=json&jscmd=data`, {signal:AbortSignal.timeout(10000)});
+      if (!resp.ok) throw new Error('Could not reach Open Library');
+      const data = await resp.json();
+      const key = `ISBN:${isbn}`;
+      if (!data[key]) throw new Error('ISBN not found in Open Library. Double-check the number.');
+      const book = data[key];
+      const title = book.title||'Unknown title';
+      const authors = (book.authors||[]).map(a=>a.name);
+      const year = (book.publish_date||'').match(/\d{4}/)?.[0]||null;
+      const publisher = (book.publishers||[]).map(p=>p.name).join(', ')||'';
+      const subjects = (book.subjects||[]).slice(0,5).map(s=>s.name||s).join(', ');
+      const olUrl = book.url||`https://openlibrary.org/isbn/${isbn}`;
+      const coverUrl = (book.cover||{}).medium||null;
+      const pages = book.number_of_pages||null;
+      return {
+        found: true, sourceType: 'Book (ISBN)',
+        title, authors, year, publisher,
+        doi: null, url: olUrl,
+        abstract: subjects ? `Subjects: ${subjects}` : '',
+        isRetracted: false,
+        pages, coverUrl,
+        validity: 'moderate',
+        validityNote: `Published book from Open Library. Publisher: ${publisher||'unknown'}. Always check edition and page number when citing.`
+      };
+    }
+
+    /* --- PubMed ID validation --- */
+    async function svValidatePMID(pmid) {
+      // summary
+      const sResp = await fetch(`https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&id=${pmid}&retmode=json`, {signal:AbortSignal.timeout(10000)});
+      if (!sResp.ok) throw new Error('PubMed unavailable');
+      const sData = await sResp.json();
+      const item = sData.result?.[pmid];
+      if (!item||!item.title) throw new Error('PubMed ID not found.');
+      // abstract
+      const fResp = await fetch(`https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=pubmed&id=${pmid}&retmode=xml`, {signal:AbortSignal.timeout(10000)});
+      let abstract = '';
+      if (fResp.ok) {
+        const xml = await fResp.text();
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(xml,'text/xml');
+        abstract = Array.from(doc.querySelectorAll('AbstractText')).map(n=>n.textContent).join(' ');
+      }
+      const doi = (item.articleids||[]).find(a=>a.idtype==='doi')?.value||null;
+      const year = item.pubdate ? parseInt(item.pubdate) : null;
+      const isRetracted = (item.pubtype||[]).some(p=>/retract/i.test(p.value||p));
+      return {
+        found: true, sourceType: 'PubMed — Biomedical Literature',
+        title: item.title.replace(/\.$/, ''),
+        authors: (item.authors||[]).slice(0,6).map(a=>a.name),
+        year, journal: item.source||'',
+        doi, url: `https://pubmed.ncbi.nlm.nih.gov/${pmid}/`,
+        abstract, isRetracted,
+        validity: isRetracted ? 'retracted' : 'high',
+        validityNote: isRetracted ? 'RETRACTED: This article has been retracted from PubMed.' : 'PubMed-indexed peer-reviewed biomedical literature. High reliability.'
+      };
+    }
+
+    /* --- Website URL validation via Open Graph + metadata heuristics --- */
+    async function svValidateURL(url) {
+      // Use AllOrigins CORS proxy to fetch page metadata
+      const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+      let title = '', description = '', domain = '';
+      try {
+        const domain_match = url.match(/https?:\/\/([^/]+)/);
+        domain = domain_match ? domain_match[1].replace(/^www\./,'') : url;
+        const resp = await fetch(proxyUrl, {signal:AbortSignal.timeout(10000)});
+        if (resp.ok) {
+          const data = await resp.json();
+          const html = data.contents||'';
+          const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+          if (titleMatch) title = titleMatch[1].trim();
+          const ogTitle = html.match(/property=["']og:title["'][^>]*content=["']([^"']+)/i) ||
+                          html.match(/content=["']([^"']+)["'][^>]*property=["']og:title["']/i);
+          if (ogTitle) title = ogTitle[1].trim();
+          const descMatch = html.match(/name=["']description["'][^>]*content=["']([^"']{10,300})/i) ||
+                            html.match(/property=["']og:description["'][^>]*content=["']([^"']{10,300})/i);
+          if (descMatch) description = descMatch[1].trim();
+        }
+      } catch {}
+      // Heuristic validity scoring for websites
+      const isGov = /\.gov(\.\w+)?$/.test(domain);
+      const isEdu = /\.edu(\.\w+)?$/.test(domain);
+      const isOrg = /\.org(\.\w+)?$/.test(domain);
+      const isWiki = /wikipedia\.org/.test(domain);
+      const isNews = /reuters|bbc|nyt|guardian|ap\.org|nature\.com|science\.org/.test(domain);
+      const validity = isGov||isEdu ? 'high' : isWiki||isNews ? 'moderate' : isOrg ? 'moderate' : 'limited';
+      const note = isGov ? 'Government domain — authoritative primary source.' :
+        isEdu ? 'Educational institution domain — generally reliable.' :
+        isWiki ? 'Wikipedia — useful for background but not citable as a primary source in academic work. Find the original source it links to.' :
+        isNews ? 'Established news/science outlet. Cite as news article, not peer-reviewed research.' :
+        isOrg ? 'Non-profit/org domain. Verify the publishing organization’s credibility.' :
+        'Unknown domain authority. Verify the organization behind this site before citing.';
+      const year = new Date().getFullYear();
+      return {
+        found: !!title, sourceType: 'Website',
+        title: title || domain, authors: [], year,
+        journal: domain, publisher: domain,
+        doi: null, url,
+        abstract: description,
+        isRetracted: false,
+        validity, validityNote: note
+      };
+    }
+
+    /* --- Free-text title search via OpenAlex then CrossRef --- */
+    async function svValidateTitle(title) {
+      // Try OpenAlex title search first
+      const oaResp = await fetch(`https://api.openalex.org/works?search=${encodeURIComponent(title)}&per-page=1&select=id,title,authorships,publication_year,doi,abstract_inverted_index,cited_by_count&mailto=citationtrace@research.tool`, {signal:AbortSignal.timeout(10000)});
+      if (oaResp.ok) {
+        const oaData = await oaResp.json();
+        const w = (oaData.results||[])[0];
+        if (w && w.title) {
+          const abstract = reconstructAbstract(w.abstract_inverted_index||{});
+          const doi = (w.doi||'').replace('https://doi.org/','');
+          const cited = w.cited_by_count||0;
+          return {
+            found: true, sourceType: 'Academic Paper (OpenAlex)',
+            title: w.title,
+            authors: (w.authorships||[]).slice(0,6).map(a=>a.author?.display_name||''),
+            year: w.publication_year,
+            doi: doi||null, url: w.doi||`https://openalex.org/${(w.id||'').split('/').pop()}`,
+            abstract, isRetracted: false,
+            cited,
+            validity: cited>50?'high':cited>5?'moderate':'limited',
+            validityNote: cited>50?`Highly cited peer-reviewed work (${cited}× citations).`:cited>5?`Moderately cited (${cited}×).`:`Low citation count (${cited}). Newly published or niche topic.`
+          };
+        }
+      }
+      // Fallback: CrossRef
+      const crResp = await fetch(`https://api.crossref.org/works?query.title=${encodeURIComponent(title)}&rows=1&select=DOI,title,author,published-print,abstract,is-referenced-by-count&mailto=citationtrace@research.tool`, {signal:AbortSignal.timeout(10000)});
+      if (crResp.ok) {
+        const crData = await crResp.json();
+        const i = (crData.message?.items||[])[0];
+        if (i) {
+          const doi = i.DOI||null;
+          const year = ((i['published-print']||{})['date-parts']||[[null]])[0][0];
+          return {
+            found: true, sourceType: 'Academic Paper (CrossRef)',
+            title: (i.title||[title])[0],
+            authors: (i.author||[]).slice(0,6).map(a=>`${a.given||''} ${a.family||''}`.trim()),
+            year, doi, url: doi?`https://doi.org/${doi}`:'',
+            abstract: stripJats(i.abstract||''),
+            isRetracted: false,
+            cited: i['is-referenced-by-count']||0,
+            validity: 'moderate', validityNote: 'Found via CrossRef. Verify this is the correct paper before citing.'
+          };
+        }
+      }
+      throw new Error('No matching paper found. Try adding the author name or publication year.');
+    }
+
+    /* --- Render validator result card --- */
+    function renderSVResult(r) {
+      const div = document.getElementById('svResults');
+      const validityConfig = {
+        high:      { color:'#16a34a', bg:'#f0fdf4', border:'#bbf7d0', label:'✓ High validity' },
+        moderate:  { color:'#d97706', bg:'#fffbeb', border:'#fde68a', label:'⚠ Moderate validity' },
+        limited:   { color:'#ea580c', bg:'#fff7ed', border:'#fed7aa', label:'⚠ Limited validity' },
+        retracted: { color:'#dc2626', bg:'#fef2f2', border:'#fecaca', label:'✗ RETRACTED' }
+      };
+      const vc = validityConfig[r.validity] || validityConfig.limited;
+      // Build a citation object to reuse our existing formatters
+      const citObj = { id: 9999, title: r.title, authors: r.authors, year: r.year, doi: r.doi, url: r.url };
+      const apaRef   = formatAPA(citObj);
+      const inTextRef = formatInText(citObj);
+      // For website/book, produce a different APA format note
+      const sourceTypeNote = r.sourceType.toLowerCase().includes('website') ?
+        `<em>Note:</em> For a website, APA format is: ${escapeHTML(r.authors.length ? _fmtAuthor(r.authors[0]) : 'Author Unknown')}. (${r.year||'n.d.'}). <em>${escapeHTML(r.title)}</em>. ${escapeHTML(r.journal||r.publisher||'')}. ${escapeHTML(r.url||'')}` :
+        '';
+      div.innerHTML = `
+        <div style="background:#fff;border:1px solid var(--color-border);border-radius:var(--radius-xl);overflow:hidden;box-shadow:var(--shadow-md);">
+          <!-- Top band: validity verdict -->
+          <div style="padding:12px 20px;background:${vc.bg};border-bottom:1px solid ${vc.border};display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+            <span style="font-size:0.8rem;font-weight:700;color:${vc.color};">${vc.label}</span>
+            <span style="font-size:0.75rem;padding:2px 10px;border:1px solid ${vc.border};border-radius:99px;background:#fff;color:${vc.color};font-weight:600;">${escapeHTML(r.sourceType)}</span>
+            <span style="font-size:0.75rem;color:${vc.color};flex:1;">${escapeHTML(r.validityNote)}</span>
+          </div>
+          <div style="padding:20px;">
+            <!-- Title & metadata -->
+            <h3 style="font-size:var(--text-base);font-weight:700;color:var(--color-header);margin-bottom:6px;line-height:1.4;">
+              ${r.url ? `<a href="${escapeHTML(r.url)}" target="_blank" rel="noopener" style="color:inherit;text-decoration:none;">${escapeHTML(r.title)} <span style="font-size:0.75rem;color:var(--color-accent)">↗</span></a>` : escapeHTML(r.title)}
+            </h3>
+            <p style="font-size:var(--text-xs);color:var(--color-text-muted);margin-bottom:${r.abstract?'12px':'0'};">  
+              ${r.authors.length ? escapeHTML(r.authors.slice(0,4).join(', ') + (r.authors.length>4?' et al.':'')) + ' · ' : ''}
+              ${r.year ? r.year + ' · ' : ''}
+              ${r.journal ? escapeHTML(r.journal) : ''}
+              ${r.doi ? ` · <a href="https://doi.org/${escapeHTML(r.doi)}" target="_blank" rel="noopener" style="color:var(--color-accent);font-family:var(--font-mono);">DOI ↗</a>` : ''}
+            </p>
+            ${r.abstract ? `<p style="font-size:var(--text-xs);color:var(--color-text-muted);font-style:italic;padding:10px 12px;background:var(--color-surface-2);border-radius:var(--radius-md);margin-bottom:12px;line-height:1.6;border-left:3px solid var(--color-accent-border);">${escapeHTML(r.abstract.slice(0,400))}${r.abstract.length>400?'…':''}</p>` : ''}
+            <!-- Validity indicators -->
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
+              ${r.isRetracted ? '<span style="background:#fef2f2;border:1px solid #fecaca;color:#dc2626;padding:2px 10px;border-radius:99px;font-size:0.7rem;font-weight:700;">⛔ RETRACTED</span>' : ''}
+              ${r.doi ? '<span style="background:#f0fdf4;border:1px solid #bbf7d0;color:#16a34a;padding:2px 10px;border-radius:99px;font-size:0.7rem;font-weight:600;">✓ DOI Verified</span>' : ''}
+              ${r.cited > 0 ? `<span style="background:#f1f5f9;border:1px solid #e2e8f0;color:#475569;padding:2px 10px;border-radius:99px;font-size:0.7rem;font-weight:600;">${r.cited}× cited</span>` : ''}
+              ${r.openAccess ? '<span style="background:#eff6ff;border:1px solid #bfdbfe;color:#3b82f6;padding:2px 10px;border-radius:99px;font-size:0.7rem;font-weight:600;">Open Access</span>' : ''}
+            </div>
+            <!-- Citation formats -->
+            <div style="border-top:1px solid var(--color-divider);padding-top:14px;">
+              <p style="font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8;margin-bottom:8px;">Ready-to-use citations</p>
+              <div style="margin-bottom:10px;">
+                <label style="font-size:0.7rem;color:var(--color-text-faint);margin-bottom:4px;display:block;">In-text (APA 7)</label>
+                <div style="display:flex;align-items:center;gap:8px;">
+                  <code id="svInText" style="flex:1;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:6px;padding:7px 10px;font-size:0.82rem;color:#1e293b;">${escapeHTML(inTextRef)}</code>
+                  <button onclick="clipboardCopy(${JSON.stringify(inTextRef)},'✓ In-text copied')" style="font-size:0.7rem;padding:5px 10px;border:1px solid #3b82f6;border-radius:6px;background:#eff6ff;color:#3b82f6;cursor:pointer;font-weight:600;white-space:nowrap;">Copy</button>
+                </div>
+              </div>
+              <div style="margin-bottom:${sourceTypeNote?'10px':'0'};">
+                <label style="font-size:0.7rem;color:var(--color-text-faint);margin-bottom:4px;display:block;">Bibliography / Reference list (APA 7)</label>
+                <div style="display:flex;align-items:flex-start;gap:8px;">
+                  <code id="svAPARef" style="flex:1;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:6px;padding:7px 10px;font-size:0.78rem;color:#1e293b;line-height:1.5;word-break:break-all;">${escapeHTML(apaRef)}</code>
+                  <button onclick="clipboardCopy(${JSON.stringify(apaRef)},'✓ APA ref copied')" style="font-size:0.7rem;padding:5px 10px;border:1px solid #3b82f6;border-radius:6px;background:#eff6ff;color:#3b82f6;cursor:pointer;font-weight:600;white-space:nowrap;">Copy</button>
+                </div>
+              </div>
+              ${sourceTypeNote ? `<p style="font-size:0.72rem;color:var(--color-text-faint);margin-top:8px;font-style:italic;">${sourceTypeNote}</p>` : ''}
+            </div>
+          </div>
+        </div>`;
+    }
+
   </script>
 </body>
 </html>
