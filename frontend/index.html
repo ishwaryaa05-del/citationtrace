@@ -1,0 +1,1279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CitationTrace — Verified Scholarly Citations</title>
+  <meta name="description" content="Get synthesized research answers backed by verified, high-confidence citations. Guaranteed provenance." />
+  <style>
+    /* =============================================
+       DESIGN TOKENS
+       ============================================= */
+    :root {
+      --text-xs:   clamp(0.75rem,  0.7rem  + 0.25vw, 0.875rem);
+      --text-sm:   clamp(0.875rem, 0.8rem  + 0.35vw, 1rem);
+      --text-base: clamp(1rem,     0.95rem + 0.25vw, 1.125rem);
+      --text-lg:   clamp(1.125rem, 1rem    + 0.75vw, 1.5rem);
+      --text-xl:   clamp(1.5rem,   1.2rem  + 1.25vw, 2.25rem);
+      --text-2xl:  clamp(2rem,     1.2rem  + 2.5vw,  3.5rem);
+
+      --space-1:  0.25rem;
+      --space-2:  0.5rem;
+      --space-3:  0.75rem;
+      --space-4:  1rem;
+      --space-5:  1.25rem;
+      --space-6:  1.5rem;
+      --space-8:  2rem;
+      --space-10: 2.5rem;
+      --space-12: 3rem;
+      --space-16: 4rem;
+      --space-20: 5rem;
+
+      --radius-sm:   0.375rem;
+      --radius-md:   0.5rem;
+      --radius-lg:   0.75rem;
+      --radius-xl:   1rem;
+      --radius-full: 9999px;
+
+      --transition-interactive: 180ms cubic-bezier(0.16, 1, 0.3, 1);
+
+      --content-narrow:  640px;
+      --content-default: 960px;
+      --content-wide:    1200px;
+
+      /* CitationTrace brand palette — academic deep navy + clear blue */
+      --color-header:         #1a2744;
+      --color-header-text:    #e8edf8;
+      --color-header-muted:   #8fa0c0;
+      --color-header-border:  #253459;
+      --color-accent:         #3b82f6;
+      --color-accent-hover:   #2563eb;
+      --color-accent-active:  #1d4ed8;
+      --color-accent-subtle:  #eff6ff;
+      --color-accent-border:  #bfdbfe;
+
+      --color-bg:              #ffffff;
+      --color-surface:         #f8fafc;
+      --color-surface-2:       #f1f5f9;
+      --color-surface-offset:  #e2e8f0;
+      --color-border:          #cbd5e1;
+      --color-divider:         #e2e8f0;
+      --color-text:            #0f172a;
+      --color-text-muted:      #475569;
+      --color-text-faint:      #94a3b8;
+
+      --color-success:         #16a34a;
+      --color-success-bg:      #f0fdf4;
+      --color-success-border:  #bbf7d0;
+      --color-warning:         #d97706;
+      --color-warning-bg:      #fffbeb;
+      --color-warning-border:  #fde68a;
+      --color-error:           #dc2626;
+      --color-error-bg:        #fef2f2;
+      --color-error-border:    #fecaca;
+
+      --shadow-sm: 0 1px 2px rgba(15,23,42,0.06);
+      --shadow-md: 0 4px 12px rgba(15,23,42,0.08);
+      --shadow-lg: 0 12px 32px rgba(15,23,42,0.12);
+
+      --font-body:    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      --font-mono:    ui-monospace, 'SF Mono', 'Cascadia Code', Consolas, monospace;
+    }
+
+    /* =============================================
+       BASE RESET
+       ============================================= */
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    html {
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      text-rendering: optimizeLegibility;
+      scroll-behavior: smooth;
+      scroll-padding-top: var(--space-20);
+    }
+    body {
+      min-height: 100dvh;
+      line-height: 1.6;
+      font-family: var(--font-body);
+      font-size: var(--text-base);
+      color: var(--color-text);
+      background-color: var(--color-bg);
+      display: flex;
+      flex-direction: column;
+    }
+    img, svg { display: block; max-width: 100%; }
+    ul[role='list'], ol[role='list'] { list-style: none; }
+    input, button, textarea, select { font: inherit; color: inherit; }
+    h1, h2, h3, h4, h5, h6 { text-wrap: balance; line-height: 1.2; }
+    p, li, figcaption { text-wrap: pretty; }
+    button { cursor: pointer; background: none; border: none; }
+    table { border-collapse: collapse; width: 100%; }
+    a { color: var(--color-accent); }
+    a:hover { color: var(--color-accent-hover); }
+
+    :focus-visible {
+      outline: 2px solid var(--color-accent);
+      outline-offset: 3px;
+      border-radius: var(--radius-sm);
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+      }
+    }
+
+    /* =============================================
+       SHIMMER / SKELETON
+       ============================================= */
+    @keyframes shimmer {
+      0%   { background-position: -200% 0; }
+      100% { background-position: 200% 0; }
+    }
+    .skeleton {
+      background: linear-gradient(
+        90deg,
+        var(--color-surface-offset) 25%,
+        var(--color-surface-2) 50%,
+        var(--color-surface-offset) 75%
+      );
+      background-size: 200% 100%;
+      animation: shimmer 1.5s ease-in-out infinite;
+      border-radius: var(--radius-sm);
+    }
+
+    /* =============================================
+       LAYOUT UTILITIES
+       ============================================= */
+    .container {
+      width: 100%;
+      max-width: var(--content-wide);
+      margin-inline: auto;
+      padding-inline: var(--space-6);
+    }
+    .container--narrow {
+      max-width: var(--content-narrow);
+    }
+    .visually-hidden {
+      position: absolute;
+      width: 1px; height: 1px;
+      padding: 0; margin: -1px;
+      overflow: hidden;
+      clip: rect(0,0,0,0);
+      white-space: nowrap;
+      border-width: 0;
+    }
+
+    /* =============================================
+       HEADER
+       ============================================= */
+    .site-header {
+      background: var(--color-header);
+      border-bottom: 1px solid var(--color-header-border);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      box-shadow: 0 2px 16px rgba(26,39,68,0.3);
+    }
+    .site-header .container {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-6);
+      padding-block: var(--space-4);
+    }
+    .logo-group {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      text-decoration: none;
+      color: var(--color-header-text);
+    }
+    .logo-group:hover { color: #fff; }
+    .logo-icon {
+      flex-shrink: 0;
+    }
+    .logo-text {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+    }
+    .logo-name {
+      font-size: var(--text-lg);
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: #fff;
+      line-height: 1;
+    }
+    .logo-tagline {
+      font-size: var(--text-xs);
+      color: var(--color-header-muted);
+      font-weight: 400;
+      letter-spacing: 0.01em;
+      line-height: 1.2;
+    }
+    .site-nav {
+      display: flex;
+      align-items: center;
+      gap: var(--space-1);
+    }
+    .nav-link {
+      font-size: var(--text-sm);
+      font-weight: 500;
+      color: var(--color-header-muted);
+      text-decoration: none;
+      padding: var(--space-2) var(--space-3);
+      border-radius: var(--radius-md);
+      transition: color var(--transition-interactive), background var(--transition-interactive);
+    }
+    .nav-link:hover {
+      color: #fff;
+      background: rgba(255,255,255,0.08);
+    }
+    .nav-link.nav-link--cta {
+      background: var(--color-accent);
+      color: #fff;
+      padding: var(--space-2) var(--space-4);
+    }
+    .nav-link.nav-link--cta:hover {
+      background: var(--color-accent-hover);
+      color: #fff;
+    }
+    @media (max-width: 600px) {
+      .logo-tagline { display: none; }
+      .nav-link:not(.nav-link--cta) { display: none; }
+    }
+
+    /* =============================================
+       DEMO BANNER
+       ============================================= */
+    .demo-banner {
+      background: linear-gradient(90deg, #1e3a5f 0%, #1a2f52 100%);
+      border-bottom: 1px solid #2d4a7a;
+      padding: var(--space-2) var(--space-6);
+      text-align: center;
+      display: none;
+    }
+    .demo-banner.visible { display: block; }
+    .demo-banner p {
+      font-size: var(--text-xs);
+      color: #93c5fd;
+      max-width: none;
+    }
+    .demo-banner strong {
+      color: #bfdbfe;
+    }
+
+    /* =============================================
+       HERO / QUERY SECTION
+       ============================================= */
+    .query-section {
+      padding-block: clamp(var(--space-12), 8vw, var(--space-20));
+      background: linear-gradient(160deg, #f8fafc 0%, #eff6ff 40%, #f8fafc 100%);
+      border-bottom: 1px solid var(--color-border);
+    }
+    .query-section .container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      gap: var(--space-6);
+    }
+    .hero-eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-2);
+      background: var(--color-accent-subtle);
+      border: 1px solid var(--color-accent-border);
+      border-radius: var(--radius-full);
+      padding: var(--space-1) var(--space-4);
+      font-size: var(--text-xs);
+      font-weight: 600;
+      color: var(--color-accent-hover);
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .hero-eyebrow-dot {
+      width: 6px; height: 6px;
+      background: var(--color-accent);
+      border-radius: 50%;
+      animation: pulse-dot 2s ease-in-out infinite;
+    }
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50%       { opacity: 0.5; transform: scale(0.8); }
+    }
+    .hero-heading {
+      font-size: var(--text-2xl);
+      font-weight: 800;
+      color: var(--color-header);
+      letter-spacing: -0.03em;
+      max-width: 16ch;
+    }
+    .hero-subheading {
+      font-size: var(--text-base);
+      color: var(--color-text-muted);
+      max-width: 52ch;
+      line-height: 1.7;
+    }
+    .search-form {
+      width: 100%;
+      max-width: 720px;
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-3);
+    }
+    .search-input-row {
+      display: flex;
+      gap: var(--space-3);
+      width: 100%;
+    }
+    .search-input {
+      flex: 1;
+      padding: var(--space-4) var(--space-5);
+      border: 2px solid var(--color-border);
+      border-radius: var(--radius-lg);
+      background: #fff;
+      font-size: var(--text-base);
+      color: var(--color-text);
+      box-shadow: var(--shadow-sm);
+      transition: border-color var(--transition-interactive), box-shadow var(--transition-interactive);
+      min-width: 0;
+    }
+    .search-input::placeholder { color: var(--color-text-faint); }
+    .search-input:focus {
+      outline: none;
+      border-color: var(--color-accent);
+      box-shadow: 0 0 0 3px rgba(59,130,246,0.15), var(--shadow-sm);
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: var(--space-2);
+      font-size: var(--text-sm);
+      font-weight: 600;
+      padding: var(--space-4) var(--space-6);
+      border-radius: var(--radius-lg);
+      border: none;
+      cursor: pointer;
+      text-decoration: none;
+      white-space: nowrap;
+      transition: background var(--transition-interactive), box-shadow var(--transition-interactive), transform var(--transition-interactive);
+    }
+    .btn:active { transform: translateY(1px); }
+    .btn-primary {
+      background: var(--color-accent);
+      color: #fff;
+      box-shadow: 0 2px 8px rgba(59,130,246,0.35);
+    }
+    .btn-primary:hover {
+      background: var(--color-accent-hover);
+      box-shadow: 0 4px 16px rgba(59,130,246,0.45);
+    }
+    .btn-primary:disabled {
+      opacity: 0.7;
+      cursor: not-allowed;
+    }
+    .search-hint {
+      font-size: var(--text-xs);
+      color: var(--color-text-faint);
+      text-align: center;
+    }
+    .search-hint strong { color: var(--color-text-muted); font-weight: 500; }
+
+    /* =============================================
+       LOADING STATE
+       ============================================= */
+    .loading-state {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: var(--space-4);
+      padding: var(--space-16) 0;
+      text-align: center;
+    }
+    .loading-state.visible { display: flex; }
+    .loading-spinner {
+      width: 40px; height: 40px;
+      border: 3px solid var(--color-surface-offset);
+      border-top-color: var(--color-accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    .loading-steps {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-2);
+    }
+    .loading-step {
+      font-size: var(--text-sm);
+      color: var(--color-text-faint);
+      opacity: 0;
+      transform: translateY(4px);
+      animation: fade-in-up 0.4s ease forwards;
+    }
+    .loading-step:nth-child(1) { animation-delay: 0.2s; }
+    .loading-step:nth-child(2) { animation-delay: 1.0s; }
+    .loading-step:nth-child(3) { animation-delay: 2.0s; }
+    @keyframes fade-in-up {
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* =============================================
+       RESULTS SECTION
+       ============================================= */
+    .results-section {
+      display: none;
+      padding-block: var(--space-12);
+      background: var(--color-bg);
+    }
+    .results-section.visible { display: block; }
+    .results-header {
+      margin-bottom: var(--space-8);
+      padding-bottom: var(--space-6);
+      border-bottom: 1px solid var(--color-divider);
+    }
+    .results-query-label {
+      font-size: var(--text-xs);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--color-text-faint);
+      margin-bottom: var(--space-2);
+    }
+    .results-query-text {
+      font-size: var(--text-lg);
+      font-weight: 600;
+      color: var(--color-header);
+    }
+    .results-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: auto auto;
+      gap: var(--space-6);
+    }
+    @media (max-width: 860px) {
+      .results-grid { grid-template-columns: 1fr; }
+      .audit-panel { grid-column: span 1; }
+    }
+    .audit-panel {
+      grid-column: span 2;
+    }
+    @media (max-width: 860px) {
+      .audit-panel { grid-column: span 1; }
+    }
+
+    /* =============================================
+       PANELS
+       ============================================= */
+    .panel {
+      background: var(--color-bg);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-xl);
+      overflow: hidden;
+      box-shadow: var(--shadow-md);
+      animation: panel-enter 0.35s ease forwards;
+    }
+    @keyframes panel-enter {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .panel:nth-child(2) { animation-delay: 0.05s; }
+    .panel:nth-child(3) { animation-delay: 0.10s; }
+    .panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-3);
+      padding: var(--space-4) var(--space-6);
+      background: var(--color-surface);
+      border-bottom: 1px solid var(--color-divider);
+    }
+    .panel-title {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      font-size: var(--text-sm);
+      font-weight: 700;
+      color: var(--color-header);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .panel-title-icon {
+      width: 18px; height: 18px;
+      color: var(--color-accent);
+      flex-shrink: 0;
+    }
+    .panel-body {
+      padding: var(--space-6);
+    }
+
+    /* =============================================
+       ANSWER PANEL
+       ============================================= */
+    .answer-text {
+      font-size: var(--text-base);
+      line-height: 1.75;
+      color: var(--color-text);
+      margin-bottom: var(--space-6);
+    }
+    .answer-text sup a {
+      color: var(--color-accent);
+      font-size: 0.75em;
+      font-weight: 700;
+      text-decoration: none;
+      padding: 0 1px;
+      transition: color var(--transition-interactive);
+    }
+    .answer-text sup a:hover { color: var(--color-accent-hover); }
+    .stats-bar {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      padding: var(--space-3) var(--space-4);
+      background: var(--color-accent-subtle);
+      border: 1px solid var(--color-accent-border);
+      border-radius: var(--radius-md);
+      font-size: var(--text-xs);
+      font-weight: 600;
+      color: var(--color-accent-hover);
+      flex-wrap: wrap;
+    }
+    .stats-bar-icon {
+      flex-shrink: 0;
+    }
+    .stats-divider {
+      width: 1px;
+      height: 14px;
+      background: var(--color-accent-border);
+    }
+    .accuracy-pill {
+      background: var(--color-accent);
+      color: #fff;
+      padding: 2px var(--space-3);
+      border-radius: var(--radius-full);
+      font-size: var(--text-xs);
+      font-weight: 700;
+    }
+
+    /* =============================================
+       CITATIONS PANEL
+       ============================================= */
+    .citations-list {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-3);
+    }
+    .citation-card {
+      padding: var(--space-4);
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-lg);
+      transition: box-shadow var(--transition-interactive), border-color var(--transition-interactive);
+      scroll-margin-top: var(--space-20);
+    }
+    .citation-card:hover {
+      box-shadow: var(--shadow-md);
+      border-color: var(--color-accent-border);
+    }
+    .citation-card-top {
+      display: flex;
+      align-items: flex-start;
+      gap: var(--space-3);
+      margin-bottom: var(--space-2);
+    }
+    .citation-number {
+      flex-shrink: 0;
+      width: 24px; height: 24px;
+      background: var(--color-accent);
+      color: #fff;
+      border-radius: 50%;
+      font-size: 0.7rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-top: 2px;
+    }
+    .citation-meta {
+      flex: 1;
+      min-width: 0;
+    }
+    .citation-title {
+      font-size: var(--text-sm);
+      font-weight: 600;
+      color: var(--color-text);
+      line-height: 1.4;
+      margin-bottom: var(--space-1);
+    }
+    .citation-authors-year {
+      font-size: var(--text-xs);
+      color: var(--color-text-muted);
+      margin-bottom: var(--space-2);
+    }
+    .citation-snippet {
+      font-size: var(--text-xs);
+      color: var(--color-text-muted);
+      line-height: 1.5;
+      font-style: italic;
+      margin-bottom: var(--space-3);
+    }
+    .citation-footer {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      flex-wrap: wrap;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-1);
+      padding: 2px var(--space-2);
+      border-radius: var(--radius-full);
+      font-size: var(--text-xs);
+      font-weight: 600;
+      line-height: 1;
+    }
+    .badge-verified {
+      background: var(--color-success-bg);
+      border: 1px solid var(--color-success-border);
+      color: var(--color-success);
+    }
+    .badge-unverified {
+      background: var(--color-error-bg);
+      border: 1px solid var(--color-error-border);
+      color: var(--color-error);
+    }
+    .badge-confidence-high {
+      background: var(--color-success-bg);
+      border: 1px solid var(--color-success-border);
+      color: var(--color-success);
+    }
+    .badge-confidence-mid {
+      background: var(--color-warning-bg);
+      border: 1px solid var(--color-warning-border);
+      color: var(--color-warning);
+    }
+    .badge-confidence-low {
+      background: var(--color-error-bg);
+      border: 1px solid var(--color-error-border);
+      color: var(--color-error);
+    }
+    .doi-link {
+      font-size: var(--text-xs);
+      color: var(--color-text-faint);
+      text-decoration: none;
+      font-family: var(--font-mono);
+      transition: color var(--transition-interactive);
+      margin-left: auto;
+    }
+    .doi-link:hover { color: var(--color-accent); }
+
+    /* =============================================
+       AUDIT TRAIL PANEL
+       ============================================= */
+    .audit-toggle-btn {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      font-size: var(--text-xs);
+      font-weight: 600;
+      color: var(--color-text-muted);
+      padding: var(--space-1) var(--space-2);
+      border-radius: var(--radius-md);
+      transition: color var(--transition-interactive), background var(--transition-interactive);
+    }
+    .audit-toggle-btn:hover {
+      color: var(--color-text);
+      background: var(--color-surface-offset);
+    }
+    .audit-toggle-icon {
+      transition: transform var(--transition-interactive);
+    }
+    .audit-toggle-btn[aria-expanded="true"] .audit-toggle-icon {
+      transform: rotate(180deg);
+    }
+    .audit-table-wrapper {
+      overflow-x: auto;
+    }
+    .audit-table {
+      font-size: var(--text-xs);
+      color: var(--color-text);
+    }
+    .audit-table thead th {
+      background: var(--color-surface);
+      color: var(--color-text-muted);
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      padding: var(--space-3) var(--space-4);
+      text-align: left;
+      border-bottom: 1px solid var(--color-divider);
+      white-space: nowrap;
+    }
+    .audit-table tbody tr {
+      border-bottom: 1px solid var(--color-divider);
+      transition: background var(--transition-interactive);
+    }
+    .audit-table tbody tr:last-child { border-bottom: none; }
+    .audit-table tbody tr:hover { background: var(--color-surface); }
+    .audit-table tbody td {
+      padding: var(--space-3) var(--space-4);
+      vertical-align: middle;
+    }
+    .confidence-bar-cell {
+      min-width: 100px;
+    }
+    .confidence-bar-wrap {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+    }
+    .confidence-bar-track {
+      flex: 1;
+      height: 6px;
+      background: var(--color-surface-offset);
+      border-radius: var(--radius-full);
+      overflow: hidden;
+    }
+    .confidence-bar-fill {
+      height: 100%;
+      border-radius: var(--radius-full);
+      transition: width 0.6s ease;
+    }
+    .confidence-bar-fill.high  { background: var(--color-success); }
+    .confidence-bar-fill.mid   { background: var(--color-warning); }
+    .confidence-bar-fill.low   { background: var(--color-error); }
+    .confidence-val {
+      font-family: var(--font-mono);
+      font-weight: 600;
+      color: var(--color-text-muted);
+    }
+    .status-badge-verified {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-weight: 600;
+      color: var(--color-success);
+    }
+
+    /* =============================================
+       MAIN WRAPPER
+       ============================================= */
+    .main-content {
+      flex: 1;
+    }
+
+    /* =============================================
+       FOOTER
+       ============================================= */
+    .site-footer {
+      background: var(--color-header);
+      color: var(--color-header-muted);
+      text-align: center;
+      padding: var(--space-6) var(--space-6);
+      font-size: var(--text-xs);
+      border-top: 1px solid var(--color-header-border);
+    }
+    .site-footer strong {
+      color: var(--color-header-text);
+    }
+    .footer-sep {
+      margin: 0 var(--space-2);
+      opacity: 0.4;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- =============================================
+       SITE HEADER
+       ============================================= -->
+  <header class="site-header" role="banner">
+    <div class="container">
+      <a href="#" class="logo-group" aria-label="CitationTrace home">
+        <!-- Inline SVG logo: stylized C + magnifying-glass trace mark -->
+        <svg class="logo-icon" aria-hidden="true" width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect width="36" height="36" rx="8" fill="#3b82f6"/>
+          <!-- Book/document shape -->
+          <rect x="7" y="9" width="14" height="18" rx="2" fill="white" opacity="0.15"/>
+          <rect x="9" y="9" width="14" height="18" rx="2" fill="white" opacity="0.2"/>
+          <rect x="11" y="9" width="14" height="18" rx="2" fill="white"/>
+          <!-- Lines suggesting text -->
+          <rect x="13" y="13" width="8" height="1.5" rx="0.75" fill="#3b82f6" opacity="0.5"/>
+          <rect x="13" y="16" width="10" height="1.5" rx="0.75" fill="#3b82f6" opacity="0.5"/>
+          <rect x="13" y="19" width="6" height="1.5" rx="0.75" fill="#3b82f6" opacity="0.5"/>
+          <!-- Magnifying glass -->
+          <circle cx="24" cy="24" r="5" stroke="#fff" stroke-width="2" fill="none"/>
+          <line x1="27.5" y1="27.5" x2="30" y2="30" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/>
+          <!-- Citation marker -->
+          <circle cx="27" cy="14" r="4" fill="#1d4ed8"/>
+          <text x="27" y="17.5" text-anchor="middle" font-size="5.5" fill="white" font-weight="bold" font-family="sans-serif">[1]</text>
+        </svg>
+        <div class="logo-text">
+          <span class="logo-name">CitationTrace</span>
+          <span class="logo-tagline">Verified Scholarly Citations, Guaranteed Provenance</span>
+        </div>
+      </a>
+      <nav class="site-nav" aria-label="Main navigation">
+        <a href="#" class="nav-link">Home</a>
+        <a href="#" class="nav-link">About</a>
+        <a href="#" class="nav-link">Docs</a>
+        <a href="#" class="nav-link nav-link--cta">Get API Access</a>
+      </nav>
+    </div>
+  </header>
+
+  <!-- Demo banner (shown on fallback) -->
+  <div class="demo-banner" id="demoBanner" role="status">
+    <p>
+      <strong>Demo mode</strong> — connect to the CitationTrace API for live results.
+      <a href="#" style="color:#93c5fd; margin-left:0.5em;">View API docs →</a>
+    </p>
+  </div>
+
+  <main class="main-content" id="main">
+
+    <!-- =============================================
+         QUERY / HERO SECTION
+         ============================================= -->
+    <section class="query-section" aria-label="Search">
+      <div class="container container--narrow">
+        <div class="hero-eyebrow">
+          <span class="hero-eyebrow-dot" aria-hidden="true"></span>
+          RAG-Powered Research
+        </div>
+        <h1 class="hero-heading">Ask a Research Question</h1>
+        <p class="hero-subheading">
+          Get synthesized answers backed by verified, high-confidence citations
+          drawn from peer-reviewed literature.
+        </p>
+        <form class="search-form" id="searchForm" role="search" aria-label="Research query">
+          <div class="search-input-row">
+            <label for="queryInput" class="visually-hidden">Research question</label>
+            <input
+              type="text"
+              id="queryInput"
+              class="search-input"
+              placeholder="e.g., What are the effects of retrieval-augmented generation on citation accuracy?"
+              autocomplete="off"
+              spellcheck="false"
+              aria-label="Research question"
+              required
+            />
+            <button type="submit" class="btn btn-primary" id="searchBtn" aria-label="Search">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+              </svg>
+              Search
+            </button>
+          </div>
+          <p class="search-hint">
+            Powered by <strong>OpenScholar-style RAG</strong> + <strong>LangSmith audit tracing</strong>
+          </p>
+        </form>
+      </div>
+    </section>
+
+    <!-- Loading state -->
+    <div class="loading-state" id="loadingState" aria-live="polite" aria-label="Loading results">
+      <div class="container" style="display:flex;flex-direction:column;align-items:center;gap:var(--space-4)">
+        <div class="loading-spinner" aria-hidden="true"></div>
+        <div class="loading-steps">
+          <p class="loading-step" id="loadStep1">🔍 Searching scholarly databases…</p>
+          <p class="loading-step" id="loadStep2">📑 Retrieving and ranking candidate papers…</p>
+          <p class="loading-step" id="loadStep3">✅ Verifying citations and computing confidence scores…</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- =============================================
+         RESULTS SECTION
+         ============================================= -->
+    <section class="results-section" id="resultsSection" aria-label="Query results">
+      <div class="container">
+        <div class="results-header">
+          <p class="results-query-label">Query</p>
+          <p class="results-query-text" id="resultsQueryText"></p>
+        </div>
+
+        <div class="results-grid">
+
+          <!-- PANEL 1: Synthesized Answer -->
+          <div class="panel" id="answerPanel">
+            <div class="panel-header">
+              <div class="panel-title">
+                <svg class="panel-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                  <polyline points="14 2 14 8 20 8"/>
+                  <line x1="16" y1="13" x2="8" y2="13"/>
+                  <line x1="16" y1="17" x2="8" y2="17"/>
+                  <polyline points="10 9 9 9 8 9"/>
+                </svg>
+                Synthesized Answer
+              </div>
+            </div>
+            <div class="panel-body">
+              <div class="answer-text" id="answerText"></div>
+              <div class="stats-bar" id="statsBar" role="status">
+                <svg class="stats-bar-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+                  <polyline points="20 6 9 17 4 12"/>
+                </svg>
+                <span id="statsText"></span>
+                <div class="stats-divider" aria-hidden="true"></div>
+                <span>Citation Accuracy:</span>
+                <span class="accuracy-pill" id="accuracyPill"></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- PANEL 2: Verified Citations -->
+          <div class="panel" id="citationsPanel">
+            <div class="panel-header">
+              <div class="panel-title">
+                <svg class="panel-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <path d="M9 12l2 2 4-4"/>
+                  <path d="M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9 9 4.03 9 9z"/>
+                </svg>
+                Verified Citations
+              </div>
+            </div>
+            <div class="panel-body">
+              <ol class="citations-list" id="citationsList" role="list" aria-label="Verified citations"></ol>
+            </div>
+          </div>
+
+          <!-- PANEL 3: Audit Trail (full width) -->
+          <div class="panel audit-panel" id="auditPanel">
+            <div class="panel-header">
+              <div class="panel-title">
+                <svg class="panel-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <path d="M3 3h18v18H3z" rx="2"/>
+                  <path d="M3 9h18M9 21V9"/>
+                </svg>
+                Chain of Evidence Audit Log
+              </div>
+              <button class="audit-toggle-btn" id="auditToggleBtn" aria-expanded="true" aria-controls="auditTableWrapper">
+                Hide
+                <svg class="audit-toggle-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+                  <polyline points="18 15 12 9 6 15"/>
+                </svg>
+              </button>
+            </div>
+            <div id="auditTableWrapper" class="audit-table-wrapper">
+              <div class="panel-body" style="padding:0">
+                <table class="audit-table" aria-label="Audit trail">
+                  <thead>
+                    <tr>
+                      <th scope="col">Claim</th>
+                      <th scope="col">Source</th>
+                      <th scope="col">Confidence</th>
+                      <th scope="col">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody id="auditTableBody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+        </div><!-- /.results-grid -->
+      </div><!-- /.container -->
+    </section>
+
+  </main>
+
+  <!-- =============================================
+       FOOTER
+       ============================================= -->
+  <footer class="site-footer" role="contentinfo">
+    <p>
+      <strong>CitationTrace</strong> © 2026
+      <span class="footer-sep">|</span>
+      Built for verified scholarly provenance
+      <span class="footer-sep">|</span>
+      Powered by OpenScholar RAG + LangSmith
+    </p>
+  </footer>
+
+  <script>
+    'use strict';
+
+    /* =============================================
+       DEMO DATA
+       ============================================= */
+    const DEMO_DATA = {
+      query: "What are the effects of retrieval-augmented generation on citation accuracy?",
+      answer: "Recent research demonstrates that Retrieval-Augmented Generation (RAG) significantly reduces citation hallucination rates compared to standard LLMs [1]. Asai et al. (2026) [2] showed that OpenScholar, a RAG-based system, achieved expert-level citation accuracy with an F1 score of 47–64%, while GPT-4o fabricated citations in 78–90% of cases. He et al. (2024) [3] proposed Chain-of-Verification (CoV-RAG) to further enhance retrieval correctness and generation consistency. Godinez (2025) [4] demonstrated 99% citation accuracy using agentic quality assurance with post-hoc citation verification. Venkit et al. (2025) [5] found through the DeepTRACE audit framework that citation accuracy ranges 40–80% across major AI systems.",
+      citations: [
+        {id: 1, title: "Trustworthiness in Retrieval-Augmented Generation Systems: A Survey", authors: ["Yujia Zhou", "Yan Liu", "Xiaoxi Li"], year: 2024, doi: "10.48550/arXiv.2409.10102", abstract_snippet: "RAG systems assessed across six dimensions: factuality, robustness, fairness, transparency, accountability, and privacy.", url: "https://arxiv.org/abs/2409.10102", confidence_score: 0.82, verified: true},
+        {id: 2, title: "Synthesizing scientific literature with retrieval-augmented language models", authors: ["Akari Asai", "Jiacheng He", "Rulin Shao"], year: 2026, doi: "10.1038/s41586-025-10072-4", abstract_snippet: "OpenScholar outperforms GPT-4o by 6.1% in correctness with expert-level citation accuracy on ScholarQABench.", url: "https://www.nature.com/articles/s41586-025-10072-4", confidence_score: 0.91, verified: true},
+        {id: 3, title: "Retrieving, Rethinking and Revising: The Chain-of-Verification Can Improve RAG", authors: ["Bolei He", "Nuo Chen", "Xinran He"], year: 2024, doi: "10.48550/arXiv.2410.05801", abstract_snippet: "Chain-of-Verification (CoV-RAG) enhances external retrieval correctness and internal generation consistency.", url: "https://arxiv.org/abs/2410.05801", confidence_score: 0.74, verified: true},
+        {id: 4, title: "HySemRAG: Hybrid Semantic RAG for Literature Synthesis", authors: ["Alejandro Godinez"], year: 2025, doi: "10.48550/arXiv.2508.05666", abstract_snippet: "99% citation accuracy in validated responses using agentic quality assurance with post-hoc citation verification.", url: "https://arxiv.org/abs/2508.05666", confidence_score: 0.88, verified: true},
+        {id: 5, title: "DeepTRACE: Auditing Deep Research AI Systems", authors: ["P. Venkit", "Philippe Laban", "Yilun Zhou"], year: 2025, doi: "10.48550/arXiv.2509.04499", abstract_snippet: "Citation accuracy ranges 40–80% across GPT-4.5/5, Perplexity, Copilot/Bing, and Gemini in deep research configurations.", url: "https://arxiv.org/abs/2509.04499", confidence_score: 0.79, verified: true}
+      ],
+      audit_trail: [
+        {claim: "RAG significantly reduces citation hallucination rates", source_id: 1, confidence: 0.82, status: "verified"},
+        {claim: "OpenScholar achieved expert-level citation accuracy (F1: 47–64%)", source_id: 2, confidence: 0.91, status: "verified"},
+        {claim: "GPT-4o fabricated citations in 78–90% of cases", source_id: 2, confidence: 0.91, status: "verified"},
+        {claim: "CoV-RAG enhances retrieval correctness and generation consistency", source_id: 3, confidence: 0.74, status: "verified"},
+        {claim: "99% citation accuracy using agentic quality assurance", source_id: 4, confidence: 0.88, status: "verified"},
+        {claim: "Citation accuracy ranges 40–80% across major AI systems", source_id: 5, confidence: 0.79, status: "verified"}
+      ],
+      total_claims: 6,
+      verified_claims: 6,
+      citation_accuracy: 1.0
+    };
+
+    /* =============================================
+       ELEMENT REFERENCES
+       ============================================= */
+    const form          = document.getElementById('searchForm');
+    const queryInput    = document.getElementById('queryInput');
+    const searchBtn     = document.getElementById('searchBtn');
+    const loadingState  = document.getElementById('loadingState');
+    const resultsSection = document.getElementById('resultsSection');
+    const demoBanner    = document.getElementById('demoBanner');
+    const resultsQueryText = document.getElementById('resultsQueryText');
+    const answerText    = document.getElementById('answerText');
+    const statsText     = document.getElementById('statsText');
+    const accuracyPill  = document.getElementById('accuracyPill');
+    const citationsList = document.getElementById('citationsList');
+    const auditTableBody = document.getElementById('auditTableBody');
+    const auditToggleBtn = document.getElementById('auditToggleBtn');
+    const auditTableWrapper = document.getElementById('auditTableWrapper');
+
+    /* =============================================
+       HELPERS
+       ============================================= */
+    function escapeHTML(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    function confidenceClass(score) {
+      if (score >= 0.6) return 'high';
+      if (score >= 0.35) return 'mid';
+      return 'low';
+    }
+    function confidenceBadgeClass(score) {
+      if (score >= 0.6) return 'badge-confidence-high';
+      if (score >= 0.35) return 'badge-confidence-mid';
+      return 'badge-confidence-low';
+    }
+
+    /** Convert [1], [2] markers to blue superscript links */
+    function renderAnswerWithCitations(text) {
+      return escapeHTML(text).replace(/\[(\d+)\]/g, (_, n) => {
+        return `<sup><a href="#citation-${n}" title="Go to citation ${n}">[${n}]</a></sup>`;
+      });
+    }
+
+    /* =============================================
+       RENDER FUNCTIONS
+       ============================================= */
+    function renderAnswer(data) {
+      resultsQueryText.textContent = data.query;
+      answerText.innerHTML = renderAnswerWithCitations(data.answer);
+      statsText.textContent = `${data.verified_claims} of ${data.total_claims} claims verified`;
+      const pct = Math.round(data.citation_accuracy * 100);
+      accuracyPill.textContent = `${pct}%`;
+    }
+
+    function renderCitations(citations) {
+      citationsList.innerHTML = '';
+      citations.forEach(c => {
+        const authors = c.authors.slice(0, 3).join(', ') + (c.authors.length > 3 ? ' et al.' : '');
+        const confClass = confidenceClass(c.confidence_score);
+        const confBadge = confidenceBadgeClass(c.confidence_score);
+        const confPct   = Math.round(c.confidence_score * 100);
+        const verifiedBadge = c.verified
+          ? `<span class="badge badge-verified">✓ Verified</span>`
+          : `<span class="badge badge-unverified">⚠ Unverified</span>`;
+
+        const li = document.createElement('li');
+        li.id = `citation-${c.id}`;
+        li.className = 'citation-card';
+        li.setAttribute('role', 'listitem');
+        li.innerHTML = `
+          <div class="citation-card-top">
+            <div class="citation-number" aria-hidden="true">${escapeHTML(String(c.id))}</div>
+            <div class="citation-meta">
+              <div class="citation-title">
+                <a href="${escapeHTML(c.url)}" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:none;" onmouseover="this.style.color='var(--color-accent)'" onmouseout="this.style.color='inherit'">
+                  ${escapeHTML(c.title)}
+                </a>
+              </div>
+              <div class="citation-authors-year">${escapeHTML(authors)} · ${escapeHTML(String(c.year))}</div>
+            </div>
+          </div>
+          <p class="citation-snippet">"${escapeHTML(c.abstract_snippet)}"</p>
+          <div class="citation-footer">
+            ${verifiedBadge}
+            <span class="badge ${confBadge}" title="Confidence score: ${confPct}%">
+              ${confPct}% confidence
+            </span>
+            <a class="doi-link" href="https://doi.org/${escapeHTML(c.doi)}" target="_blank" rel="noopener noreferrer" title="View DOI">
+              DOI ↗
+            </a>
+          </div>
+        `;
+        citationsList.appendChild(li);
+      });
+    }
+
+    function renderAuditTrail(auditTrail, citations) {
+      auditTableBody.innerHTML = '';
+      const citationMap = {};
+      citations.forEach(c => { citationMap[c.id] = c; });
+
+      auditTrail.forEach(row => {
+        const source = citationMap[row.source_id];
+        const confClass = confidenceClass(row.confidence);
+        const confPct = Math.round(row.confidence * 100);
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td style="max-width:320px;">${escapeHTML(row.claim)}</td>
+          <td>
+            <a href="#citation-${escapeHTML(String(row.source_id))}" style="color:var(--color-accent);font-weight:600;text-decoration:none;" title="${source ? escapeHTML(source.title) : ''}">
+              [${escapeHTML(String(row.source_id))}]
+            </a>
+            ${source ? `<span style="color:var(--color-text-faint);margin-left:var(--space-1);font-size:var(--text-xs);">${escapeHTML(source.authors[0]?.split(' ').pop() || '')} ${source.year}</span>` : ''}
+          </td>
+          <td class="confidence-bar-cell">
+            <div class="confidence-bar-wrap">
+              <div class="confidence-bar-track" role="progressbar" aria-valuenow="${confPct}" aria-valuemin="0" aria-valuemax="100" aria-label="Confidence ${confPct}%">
+                <div class="confidence-bar-fill ${confClass}" style="width:${confPct}%"></div>
+              </div>
+              <span class="confidence-val">${confPct}%</span>
+            </div>
+          </td>
+          <td>
+            ${row.status === 'verified'
+              ? `<span class="status-badge-verified">✓ Verified</span>`
+              : `<span style="color:var(--color-error);font-weight:600;">⚠ ${escapeHTML(row.status)}</span>`
+            }
+          </td>
+        `;
+        auditTableBody.appendChild(tr);
+      });
+    }
+
+    function renderResults(data, isDemo) {
+      renderAnswer(data);
+      renderCitations(data.citations);
+      renderAuditTrail(data.audit_trail, data.citations);
+
+      if (isDemo) {
+        demoBanner.classList.add('visible');
+      } else {
+        demoBanner.classList.remove('visible');
+      }
+
+      loadingState.classList.remove('visible');
+      resultsSection.classList.add('visible');
+
+      // Smooth scroll to results
+      resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    /* =============================================
+       AUDIT TRAIL TOGGLE
+       ============================================= */
+    auditToggleBtn.addEventListener('click', () => {
+      const expanded = auditToggleBtn.getAttribute('aria-expanded') === 'true';
+      auditToggleBtn.setAttribute('aria-expanded', String(!expanded));
+      auditToggleBtn.firstChild.textContent = expanded ? 'Show' : 'Hide';
+      if (expanded) {
+        auditTableWrapper.style.display = 'none';
+      } else {
+        auditTableWrapper.style.display = '';
+      }
+    });
+
+    /* =============================================
+       SEARCH HANDLER
+       ============================================= */
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const query = queryInput.value.trim();
+      if (!query) return;
+
+      // Show loading
+      resultsSection.classList.remove('visible');
+      loadingState.classList.add('visible');
+      demoBanner.classList.remove('visible');
+      searchBtn.disabled = true;
+      searchBtn.innerHTML = `
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="animation:spin 0.8s linear infinite" aria-hidden="true">
+          <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+        </svg>
+        Searching…
+      `;
+
+      // Scroll to loading area
+      loadingState.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+      let data = null;
+      let isDemo = false;
+
+      try {
+        const controller = new AbortController();
+        const timeoutId  = setTimeout(() => controller.abort(), 8000);
+        const response = await fetch('http://localhost:8000/query', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query }),
+          signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        data = await response.json();
+      } catch (err) {
+        // Backend unreachable — use demo data
+        data = { ...DEMO_DATA, query };
+        isDemo = true;
+        // Add a small delay for UX polish (let loading steps animate)
+        await new Promise(r => setTimeout(r, 2400));
+      }
+
+      // Restore button
+      searchBtn.disabled = false;
+      searchBtn.innerHTML = `
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+        </svg>
+        Search
+      `;
+
+      renderResults(data, isDemo);
+    });
+
+    /* =============================================
+       KEYBOARD: Enter key in input
+       ============================================= */
+    queryInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') form.dispatchEvent(new Event('submit'));
+    });
+
+    /* =============================================
+       AUDIT TABLE: smooth expand/collapse height
+       ============================================= */
+    // Ensure table is visible by default
+    auditTableWrapper.style.display = '';
+    auditToggleBtn.setAttribute('aria-expanded', 'true');
+  </script>
+</body>
+</html>
