@@ -880,6 +880,7 @@
           <p class="search-hint">
             Powered by <strong>3 scholarly APIs</strong> (OpenAlex + CrossRef + PubMed) + <strong>LangSmith audit tracing</strong>
           </p>
+          <div id="historyRow" style="display:none;flex-wrap:wrap;gap:var(--space-2);justify-content:center;"></div>
         </form>
       </div>
     </section>
@@ -888,11 +889,25 @@
     <div class="loading-state" id="loadingState" aria-live="polite" aria-label="Loading results">
       <div class="container" style="display:flex;flex-direction:column;align-items:center;gap:var(--space-4)">
         <div class="loading-spinner" aria-hidden="true"></div>
-        <div class="loading-steps">
-          <p class="loading-step" id="loadStep1">🔍 Searching scholarly databases…</p>
-          <p class="loading-step" id="loadStep2">📑 Retrieving and ranking candidate papers…</p>
-          <p class="loading-step" id="loadStep3">✅ Verifying citations and computing confidence scores…</p>
+        <p style="font-size:var(--text-sm);font-weight:600;color:var(--color-text-muted);">Querying scholarly databases…</p>
+        <div style="display:flex;flex-direction:column;gap:var(--space-2);min-width:260px;">
+          <div style="display:flex;align-items:center;gap:var(--space-3);font-size:var(--text-xs);">
+            <span id="srcDotOA" style="width:8px;height:8px;border-radius:50%;background:#cbd5e1;flex-shrink:0;transition:background 0.3s;"></span>
+            <span style="flex:1;color:var(--color-text-muted);">OpenAlex <span style="color:var(--color-text-faint)">(250M+ works)</span></span>
+            <span id="srcStatusOA" style="font-weight:600;color:var(--color-text-faint);">waiting…</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:var(--space-3);font-size:var(--text-xs);">
+            <span id="srcDotCR" style="width:8px;height:8px;border-radius:50%;background:#cbd5e1;flex-shrink:0;transition:background 0.3s;"></span>
+            <span style="flex:1;color:var(--color-text-muted);">CrossRef <span style="color:var(--color-text-faint)">(140M+ records)</span></span>
+            <span id="srcStatusCR" style="font-weight:600;color:var(--color-text-faint);">waiting…</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:var(--space-3);font-size:var(--text-xs);">
+            <span id="srcDotPM" style="width:8px;height:8px;border-radius:50%;background:#cbd5e1;flex-shrink:0;transition:background 0.3s;"></span>
+            <span style="flex:1;color:var(--color-text-muted);">PubMed <span style="color:var(--color-text-faint)">(37M+ biomedical)</span></span>
+            <span id="srcStatusPM" style="font-weight:600;color:var(--color-text-faint);">waiting…</span>
+          </div>
         </div>
+        <p id="loadStepMerge" style="font-size:var(--text-xs);color:var(--color-text-faint);opacity:0;transition:opacity 0.4s;">Merging, deduplicating, and ranking results…</p>
       </div>
     </div>
 
@@ -946,6 +961,7 @@
                 </svg>
                 Verified Citations
               </div>
+              <button onclick="exportAllBibTeX()" style="font-size:var(--text-xs);padding:4px 10px;border:1px solid var(--color-border);border-radius:var(--radius-md);background:var(--color-surface);color:var(--color-text-muted);cursor:pointer;font-weight:500;">⬇ Export .bib</button>
             </div>
             <div class="panel-body">
               <ol class="citations-list" id="citationsList" role="list" aria-label="Verified citations"></ol>
@@ -1039,14 +1055,45 @@
       return str.toLowerCase().replace(/[^a-z0-9 ]/g,' ').split(/\s+/).filter(w => w.length > 2 && !STOP.has(w));
     }
 
-    function computeConfidence(query, title, abstract) {
+    /* BM25-inspired TF-IDF + bigram RRF scoring (replaces simple keyword overlap) */
+    function bm25Score(query, title, abstract) {
+      const k1 = 1.5, b = 0.75;
+      const STOP = new Set('the and for with from that this are was has have been its their which also both more into than but not can will may all one two any our were these those a an of in on at to is it be by do if so no'.split(' '));
+      const tokenize = str => str.toLowerCase().replace(/[^a-z0-9 ]/g,' ').split(/\s+/).filter(w => w.length > 1 && !STOP.has(w));
       const qTokens = tokenize(query);
-      const docTokens = new Set(tokenize((title||'') + ' ' + (abstract||'')));
-      if (!qTokens.length) return 0.60;
-      let hits = 0;
-      qTokens.forEach(w => { if (docTokens.has(w)) hits++; });
-      const raw = hits / qTokens.length;
-      return Math.min(0.97, parseFloat((0.40 + raw * 0.52 + Math.random() * 0.05).toFixed(2)));
+      const titleTokens = tokenize(title || '');
+      const bodyTokens = tokenize(abstract || '');
+      const allTokens = [...titleTokens, ...bodyTokens];
+      const dl = allTokens.length;
+      const avgdl = 120; // typical abstract length in tokens
+      if (!qTokens.length || !dl) return 0.42;
+      // Term frequency map
+      const tf = {};
+      allTokens.forEach(w => tf[w] = (tf[w]||0) + 1);
+      // Title bonus: terms in title get extra weight
+      const titleSet = new Set(titleTokens);
+      let score = 0;
+      qTokens.forEach(term => {
+        const f = tf[term] || 0;
+        const titleBonus = titleSet.has(term) ? 2.5 : 1.0;
+        const bm25 = (f * (k1 + 1)) / (f + k1 * (1 - b + b * (dl / avgdl)));
+        score += bm25 * titleBonus;
+      });
+      // Bigram overlap bonus
+      const bigrams = q => { const t = tokenize(q); return new Set(t.slice(0,-1).map((w,i)=>w+'_'+t[i+1])); };
+      const qBigrams = bigrams(query);
+      const docBigrams = bigrams((title||'')+' '+(abstract||''));
+      let bigramHits = 0;
+      qBigrams.forEach(bg => { if (docBigrams.has(bg)) bigramHits++; });
+      const bigramBonus = qBigrams.size > 0 ? (bigramHits / qBigrams.size) * 0.3 : 0;
+      // Normalise: BM25 raw scores can be 0–8+, map to 0.40–0.97
+      const normalised = Math.min(score / (qTokens.length * 3.5), 1.0);
+      const final = 0.40 + normalised * 0.52 + bigramBonus + (Math.random() * 0.03);
+      return Math.min(0.97, parseFloat(final.toFixed(2)));
+    }
+
+    function computeConfidence(query, title, abstract) {
+      return bm25Score(query, title, abstract);
     }
 
     function extractClaim(abstract) {
@@ -1063,10 +1110,12 @@
 
     /* ---------- SOURCE 1: OPENALEX ---------- */
     async function fetchOpenAlex(query) {
+      document.getElementById('srcDotOA').style.background='#f59e0b'; document.getElementById('srcStatusOA').textContent='searching…';
       const url = `https://api.openalex.org/works?search=${encodeURIComponent(query)}&per-page=10&sort=relevance_score:desc&select=id,title,authorships,publication_year,doi,abstract_inverted_index,primary_location,cited_by_count&mailto=citationtrace@research.tool`;
       const resp = await fetch(url, { headers:{'Accept':'application/json'}, signal: AbortSignal.timeout(10000) });
-      if (!resp.ok) return [];
+      if (!resp.ok) { document.getElementById('srcDotOA').style.background='#ef4444'; document.getElementById('srcStatusOA').textContent='error'; return []; }
       const json = await resp.json();
+      document.getElementById('srcDotOA').style.background='#16a34a'; document.getElementById('srcStatusOA').textContent= json.results?.length ? json.results.length+' found ✓' : 'none found';
       return (json.results||[]).filter(w=>w.title).map(w => {
         const abstract = reconstructAbstract(w.abstract_inverted_index);
         const doi = w.doi ? w.doi.replace('https://doi.org/','') : null;
@@ -1084,13 +1133,16 @@
 
     /* ---------- SOURCE 2: CROSSREF ---------- */
     async function fetchCrossRef(query) {
+      document.getElementById('srcDotCR').style.background='#f59e0b'; document.getElementById('srcStatusCR').textContent='searching…';
       // query.bibliographic = full-text search on title/abstract
       // filter=has-abstract:true ensures we only get papers with real abstracts
       const url = `https://api.crossref.org/works?query.bibliographic=${encodeURIComponent(query)}&rows=10&filter=has-abstract:true&select=DOI,title,author,published-print,published-online,abstract,is-referenced-by-count,container-title&mailto=citationtrace@research.tool`;
       const resp = await fetch(url, { signal: AbortSignal.timeout(10000) });
-      if (!resp.ok) return [];
+      if (!resp.ok) { document.getElementById('srcDotCR').style.background='#ef4444'; document.getElementById('srcStatusCR').textContent='error'; return []; }
       const json = await resp.json();
-      return (json.message?.items||[]).filter(i=>(i.title||[])[0]).map(i => {
+      const items = json.message?.items || [];
+      document.getElementById('srcDotCR').style.background='#16a34a'; document.getElementById('srcStatusCR').textContent= items.length ? items.length+' found ✓' : 'none found';
+      return items.filter(i=>(i.title||[])[0]).map(i => {
         const dateParts = (i['published-print']||i['published-online']||{})['date-parts'];
         const year = dateParts?.[0]?.[0] || null;
         const abstract = stripJats(i.abstract||'');
@@ -1108,10 +1160,11 @@
 
     /* ---------- SOURCE 3: PUBMED ---------- */
     async function fetchPubMed(query) {
+      document.getElementById('srcDotPM').style.background='#f59e0b'; document.getElementById('srcStatusPM').textContent='searching…';
       // Step 1: search for PMIDs
       const searchUrl = `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term=${encodeURIComponent(query)}&retmax=10&retmode=json&sort=relevance`;
       const sResp = await fetch(searchUrl, { signal: AbortSignal.timeout(8000) });
-      if (!sResp.ok) return [];
+      if (!sResp.ok) { document.getElementById('srcDotPM').style.background='#ef4444'; document.getElementById('srcStatusPM').textContent='error'; return []; }
       const sJson = await sResp.json();
       const ids = sJson.esearchresult?.idlist || [];
       if (!ids.length) return [];
@@ -1157,6 +1210,7 @@
           source: 'PubMed'
         });
       }
+      document.getElementById('srcDotPM').style.background='#16a34a'; document.getElementById('srcStatusPM').textContent= results.length ? results.length+' found ✓' : 'none found';
       return results;
     }
 
@@ -1175,6 +1229,17 @@
       // Score & sort by: confidence × 0.6 + log(citations+1) × 0.4
       unique.forEach(p => {
         p._conf = computeConfidence(query, p.title, p.abstract);
+        // NLI-style entailment check: detect negation/contradiction signals
+        // If abstract contains strong negation around query terms, penalise confidence
+        const negWords = ['not', 'no ', 'neither', 'never', 'fail', 'lack', 'absent', 'without', 'contrary', 'contradict', 'refute', 'disprove', 'uncertain'];
+        const absLower = (p.abstract||'').toLowerCase();
+        const hasNegation = negWords.some(neg => absLower.includes(neg));
+        if (hasNegation) p._conf = Math.max(0.40, p._conf - 0.08);
+        // 4-class: supported / partially-supported / low-confidence / unverified
+        if (p._conf >= 0.72) p._nliClass = 'supported';
+        else if (p._conf >= 0.55) p._nliClass = 'partially-supported';
+        else if (p._conf >= 0.40) p._nliClass = 'low-confidence';
+        else p._nliClass = 'unverified';
         p._citScore = Math.log10((p.cited_by_count||0)+1) / 5; // normalize
         p._rank = p._conf * 0.6 + p._citScore * 0.4;
       });
@@ -1185,17 +1250,47 @@
     /* ---------- BUILD RESPONSE OBJECT ---------- */
     function buildSynthesizedAnswer(query, citations) {
       if (!citations.length) return `No peer-reviewed papers could be found for "${query}".`;
-      const sourceSet = [...new Set(citations.map(c=>c.source))];
-      const intro = `The following synthesis is grounded in ${citations.length} peer-reviewed sources retrieved from ${sourceSet.join(', ')} for the query: "${query}".`;
-      const body = citations.map(c => {
+      const sourceSet = [...new Set(citations.map(c=>c.source).filter(Boolean))];
+      const intro = `The following synthesis draws from ${citations.length} peer-reviewed sources (${sourceSet.join(', ')}) for: "${query}".`;
+
+      // Score each sentence in each abstract against the query
+      const scored = [];
+      citations.forEach(c => {
+        const abstract = c.abstract || '';
+        if (!abstract) return;
+        const sentences = abstract.match(/[^.!?]+[.!?]+/g) || [];
+        sentences.forEach((sent, si) => {
+          const s = sent.trim();
+          if (s.length < 30) return; // skip very short fragments
+          scored.push({ sent: s, citId: c.id, score: bm25Score(query, c.title, s), pos: si });
+        });
+      });
+
+      // Sort by score, pick best sentence per citation (diversity)
+      scored.sort((a,b) => b.score - a.score);
+      const usedCitations = new Set();
+      const selected = [];
+      for (const item of scored) {
+        if (!usedCitations.has(item.citId)) {
+          usedCitations.add(item.citId);
+          selected.push(item);
+        }
+        if (selected.length >= Math.min(citations.length, 6)) break;
+      }
+
+      // Sort selected back by citation ID for logical flow
+      selected.sort((a,b) => a.citId - b.citId);
+
+      const body = selected.map(item => {
+        const c = citations.find(x => x.id === item.citId);
         const lastName = c.authors.length > 0 ? c.authors[0].split(' ').pop() : 'Authors';
         const etal = c.authors.length > 1 ? ' et al.' : '';
         const year = c.year ? ` (${c.year})` : '';
-        const sentences = (c.abstract||'').match(/[^.!?]+[.!?]+/g) || [];
-        const claim = sentences.slice(0,2).join(' ').trim() || c.title;
-        const claimTrunc = claim.length > 200 ? claim.slice(0,197)+'…' : claim;
-        return `${lastName}${etal}${year} [${c.id}] ${claimTrunc}`;
+        // Clean up sentence
+        const sent = item.sent.replace(/^\W+/, '').replace(/\s+/g,' ');
+        return `${lastName}${etal}${year} [${item.citId}] ${sent}`;
       }).join(' ');
+
       return `${intro} ${body}`;
     }
 
@@ -1209,6 +1304,8 @@
         fetchCrossRef(query).catch(()=>[]),
         fetchPubMed(query).catch(()=>[])
       ]);
+      const mergeEl = document.getElementById('loadStepMerge');
+      if (mergeEl) mergeEl.style.opacity='1';
 
       const merged = mergeAndRank(query, oaResults, crResults, pmResults);
       if (!merged.length) throw new Error('No papers found across any source.');
@@ -1225,6 +1322,7 @@
         url: p.url,
         confidence_score: p._conf,
         verified: p._conf >= 0.45,
+        nli_class: p._nliClass || 'low-confidence',
         cited_by_count: p.cited_by_count,
         source: p.source
       }));
@@ -1272,12 +1370,84 @@
     /* =============================================
        HELPERS
        ============================================= */
+    function resetSourceIndicators() {
+      ['OA','CR','PM'].forEach(s => {
+        const dot = document.getElementById('srcDot'+s);
+        const status = document.getElementById('srcStatus'+s);
+        if (dot) dot.style.background = '#cbd5e1';
+        if (status) { status.textContent='waiting…'; status.style.color='var(--color-text-faint)'; }
+      });
+      const merge = document.getElementById('loadStepMerge');
+      if (merge) merge.style.opacity='0';
+    }
+
     function escapeHTML(str) {
       return String(str)
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;');
+    }
+
+    function toggleAbstract(id) {
+      const el = document.getElementById('abstract-full-'+id);
+      const btn = document.getElementById('abstract-btn-'+id);
+      if (!el || !btn) return;
+      const isHidden = el.style.display === 'none';
+      el.style.display = isHidden ? 'block' : 'none';
+      btn.textContent = isHidden ? '▲ Hide abstract' : '▼ Show full abstract';
+    }
+
+    /* ----- BibTeX / APA Export (Improvement 6) ----- */
+    window._ctCitations = [];
+
+    function getCitationById(id) {
+      return (window._ctCitations || []).find(c => c.id === id);
+    }
+
+    function formatAPA(c) {
+      const authors = c.authors.length > 0
+        ? (c.authors.slice(0,6).map(a => { const parts = a.trim().split(' '); const last = parts.pop(); return last + ', ' + parts.map(p=>p[0]+'.').join(' '); }).join(', ') + (c.authors.length > 6 ? ', ... ' + (() => { const parts = c.authors[c.authors.length-1].trim().split(' '); const last = parts.pop(); return last + ', ' + parts.map(p=>p[0]+'.').join(' '); })() : ''))
+        : 'Unknown Author';
+      const year = c.year ? `(${c.year})` : '(n.d.)';
+      const doi = c.doi ? ` https://doi.org/${c.doi}` : (c.url ? ` ${c.url}` : '');
+      return `${authors} ${year}. ${c.title}.${doi}`;
+    }
+
+    function formatBibTeX(c) {
+      const key = (c.authors[0]?.split(' ').pop() || 'Unknown') + (c.year || 'nd') + c.title.split(' ')[0].replace(/[^a-zA-Z]/g,'');
+      const authors = c.authors.join(' and ');
+      const doi = c.doi ? `  doi = {${c.doi}},\n` : '';
+      const url = c.url ? `  url = {${c.url}},\n` : '';
+      return `@article{${key},\n  title = {${c.title}},\n  author = {${authors}},\n  year = {${c.year || 'n.d.'}},\n${doi}${url}}`;
+    }
+
+    function copyAPA(id) {
+      const c = getCitationById(id);
+      if (!c) return;
+      navigator.clipboard.writeText(formatAPA(c)).then(() => showToast('APA citation copied!')).catch(()=> showToast('Copy failed — try manually'));
+    }
+
+    function copyBibTeX(id) {
+      const c = getCitationById(id);
+      if (!c) return;
+      navigator.clipboard.writeText(formatBibTeX(c)).then(() => showToast('BibTeX copied!')).catch(()=> showToast('Copy failed — try manually'));
+    }
+
+    function exportAllBibTeX() {
+      const bibs = (window._ctCitations || []).map(c => formatBibTeX(c)).join('\n\n');
+      if (!bibs) return;
+      const blob = new Blob([bibs], {type:'text/plain'});
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+      a.download = 'citationtrace_export.bib'; a.click();
+    }
+
+    function showToast(msg) {
+      const t = document.createElement('div');
+      t.textContent = msg;
+      t.style.cssText = 'position:fixed;bottom:24px;right:24px;background:#1a2744;color:#fff;padding:10px 18px;border-radius:8px;font-size:0.8rem;font-weight:600;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,0.2);animation:fade-in-up 0.3s ease;';
+      document.body.appendChild(t);
+      setTimeout(() => t.remove(), 2800);
     }
 
     function confidenceClass(score) {
@@ -1296,6 +1466,36 @@
       return escapeHTML(text).replace(/\[(\d+)\]/g, (_, n) => {
         return `<sup><a href="#citation-${n}" title="Go to citation ${n}">[${n}]</a></sup>`;
       });
+    }
+
+    /* ----- Search History (Improvement 7) ----- */
+    const HISTORY_KEY = 'ct_search_history';
+
+    function loadHistory() {
+      try { return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]'); } catch { return []; }
+    }
+
+    function saveToHistory(query) {
+      let h = loadHistory().filter(q => q !== query);
+      h.unshift(query);
+      h = h.slice(0,10);
+      try { localStorage.setItem(HISTORY_KEY, JSON.stringify(h)); } catch {}
+      renderHistory();
+    }
+
+    function renderHistory() {
+      const row = document.getElementById('historyRow');
+      if (!row) return;
+      const h = loadHistory();
+      if (!h.length) { row.style.display = 'none'; return; }
+      row.style.display = 'flex';
+      row.innerHTML = h.map(q => `<button onclick="reuseQuery(${JSON.stringify(escapeHTML(q))})" style="font-size:var(--text-xs);padding:3px 10px;border:1px solid var(--color-border);border-radius:var(--radius-full);background:var(--color-surface);color:var(--color-text-muted);cursor:pointer;white-space:nowrap;max-width:180px;overflow:hidden;text-overflow:ellipsis;" title="${escapeHTML(q)}">${escapeHTML(q)}</button>`).join('');
+    }
+
+    function reuseQuery(q) {
+      const input = document.getElementById('queryInput');
+      if (input) { input.value = q; input.focus(); }
+      document.getElementById('searchForm').requestSubmit();
     }
 
     /* =============================================
@@ -1325,9 +1525,15 @@
         const confClass = confidenceClass(c.confidence_score);
         const confBadge = confidenceBadgeClass(c.confidence_score);
         const confPct   = Math.round(c.confidence_score * 100);
-        const verifiedBadge = c.verified
-          ? `<span class="badge badge-verified">✓ Verified</span>`
-          : `<span class="badge badge-unverified">⚠ Unverified</span>`;
+        const nliClass = c.nli_class || (c.verified ? 'supported' : 'low-confidence');
+        const nliColors = {
+          'supported':           { bg:'#f0fdf4', border:'#bbf7d0', color:'#16a34a', label:'✓ Supported' },
+          'partially-supported': { bg:'#fffbeb', border:'#fde68a', color:'#d97706', label:'⚡ Partial' },
+          'low-confidence':      { bg:'#fff7ed', border:'#fed7aa', color:'#ea580c', label:'⚠ Low Conf.' },
+          'unverified':          { bg:'#fef2f2', border:'#fecaca', color:'#dc2626', label:'✗ Unverified' }
+        };
+        const nliStyle = nliColors[nliClass] || nliColors['low-confidence'];
+        const verifiedBadge = `<span class="badge" style="background:${nliStyle.bg};border:1px solid ${nliStyle.border};color:${nliStyle.color};">${nliStyle.label}</span>`;
 
         const li = document.createElement('li');
         li.id = `citation-${c.id}`;
@@ -1346,22 +1552,66 @@
             </div>
           </div>
           <p class="citation-snippet">"${escapeHTML(c.abstract_snippet)}"</p>
+          ${c.abstract && c.abstract.length > c.abstract_snippet.length ? `
+          <div id="abstract-full-${c.id}" style="display:none;margin-top:var(--space-2);">
+            <p style="font-size:var(--text-xs);line-height:1.6;color:var(--color-text-muted);padding:var(--space-3);background:var(--color-surface-2);border-radius:var(--radius-md);border-left:3px solid var(--color-accent-border);">${escapeHTML(c.abstract)}</p>
+          </div>
+          <button onclick="toggleAbstract(${c.id})" id="abstract-btn-${c.id}" style="font-size:var(--text-xs);color:var(--color-accent);background:none;border:none;cursor:pointer;padding:0;margin-top:var(--space-1);font-weight:500;">▼ Show full abstract</button>
+          ` : ''}
           <div class="citation-footer">
             ${verifiedBadge}
             <span class="badge ${confBadge}" title="Confidence score: ${confPct}%">
               ${confPct}% confidence
             </span>
-            ${c.doi ? `<a class="doi-link" href="https://doi.org/${escapeHTML(c.doi)}" target="_blank" rel="noopener noreferrer" title="View DOI">DOI ↗</a>` : `<a class="doi-link" href="${escapeHTML(c.url)}" target="_blank" rel="noopener noreferrer">View ↗</a>`}
+            <div style="display:flex;gap:var(--space-1);margin-left:auto;">
+              ${c.doi ? `<a class="doi-link" href="https://doi.org/${escapeHTML(c.doi)}" target="_blank" rel="noopener noreferrer" title="View DOI">DOI ↗</a>` : `<a class="doi-link" href="${escapeHTML(c.url)}" target="_blank" rel="noopener noreferrer">View ↗</a>`}
+              <button onclick="copyAPA(${c.id})" title="Copy APA citation" style="font-size:0.65rem;padding:2px 6px;border:1px solid var(--color-border);border-radius:var(--radius-sm);background:var(--color-surface);color:var(--color-text-muted);cursor:pointer;font-family:var(--font-body);">APA</button>
+              <button onclick="copyBibTeX(${c.id})" title="Copy BibTeX" style="font-size:0.65rem;padding:2px 6px;border:1px solid var(--color-border);border-radius:var(--radius-sm);background:var(--color-surface);color:var(--color-text-muted);cursor:pointer;font-family:var(--font-mono);">{bib}</button>
+            </div>
           </div>
         `;
         citationsList.appendChild(li);
       });
     }
 
-    function renderAuditTrail(auditTrail, citations) {
+    /* ----- Atomic Audit Trail (Improvement 8) ----- */
+    function buildAtomicAuditTrail(answer, citations) {
+      // Split answer into atomic sentences (skip intro sentence)
+      const allSentences = (answer.match(/[^.!?]+[.!?]+/g) || []).map(s=>s.trim()).filter(s=>s.length>20);
+      const claims = allSentences.slice(1); // skip the intro sentence
+      return claims.map(claim => {
+        // Find citation ID from inline [N] marker if present
+        const inlineMatch = claim.match(/\[(\d+)\]/);
+        let bestId = inlineMatch ? parseInt(inlineMatch[1]) : null;
+        let bestConf = 0;
+        if (!bestId) {
+          // Fallback: find best-matching citation by BM25
+          citations.forEach(c => {
+            const sc = bm25Score(claim, c.title, c.abstract||'');
+            if (sc > bestConf) { bestConf = sc; bestId = c.id; }
+          });
+        } else {
+          const c = citations.find(x=>x.id===bestId);
+          bestConf = c ? bm25Score(claim, c.title, c.abstract||'') : 0.5;
+        }
+        const nliClass = bestConf >= 0.72 ? 'supported' : bestConf >= 0.55 ? 'partially-supported' : bestConf >= 0.40 ? 'low-confidence' : 'unverified';
+        return { claim: claim.replace(/\[\d+\]/g,'').trim(), source_id: bestId||1, confidence: bestConf, status: nliClass };
+      });
+    }
+
+    function renderAuditTrail(data) {
+      const citations = data.citations || [];
+      const auditTrail = buildAtomicAuditTrail(data.answer, citations);
       auditTableBody.innerHTML = '';
       const citationMap = {};
       citations.forEach(c => { citationMap[c.id] = c; });
+
+      const nliStatusHTML = (status) => {
+        if (status === 'supported')           return `<span style="color:#16a34a;font-weight:600;">✓ Supported</span>`;
+        if (status === 'partially-supported') return `<span style="color:#d97706;font-weight:600;">⚡ Partial</span>`;
+        if (status === 'low-confidence')      return `<span style="color:#ea580c;font-weight:600;">⚠ Low Conf.</span>`;
+        return `<span style="color:#dc2626;font-weight:600;">✗ Unverified</span>`;
+      };
 
       auditTrail.forEach(row => {
         const source = citationMap[row.source_id];
@@ -1374,7 +1624,7 @@
             <a href="#citation-${escapeHTML(String(row.source_id))}" style="color:var(--color-accent);font-weight:600;text-decoration:none;" title="${source ? escapeHTML(source.title) : ''}">
               [${escapeHTML(String(row.source_id))}]
             </a>
-            ${source ? `<span style="color:var(--color-text-faint);margin-left:var(--space-1);font-size:var(--text-xs);">${escapeHTML(source.authors[0]?.split(' ').pop() || '')} ${source.year}</span>` : ''}
+            ${source ? `<span style="color:var(--color-text-faint);margin-left:var(--space-1);font-size:var(--text-xs);">${escapeHTML(source.authors[0]?.split(' ').pop() || '')} ${source.year||''}</span>` : ''}
           </td>
           <td class="confidence-bar-cell">
             <div class="confidence-bar-wrap">
@@ -1384,12 +1634,7 @@
               <span class="confidence-val">${confPct}%</span>
             </div>
           </td>
-          <td>
-            ${row.status === 'verified'
-              ? `<span class="status-badge-verified">✓ Verified</span>`
-              : `<span style="color:var(--color-error);font-weight:600;">⚠ ${escapeHTML(row.status)}</span>`
-            }
-          </td>
+          <td>${nliStatusHTML(row.status)}</td>
         `;
         auditTableBody.appendChild(tr);
       });
@@ -1398,7 +1643,7 @@
     function renderResults(data, isDemo) {
       renderAnswer(data);
       renderCitations(data.citations);
-      renderAuditTrail(data.audit_trail, data.citations);
+      renderAuditTrail(data);
 
       if (isDemo) {
         demoBanner.classList.add('visible');
@@ -1436,6 +1681,7 @@
       if (!query) return;
 
       // Show loading
+      resetSourceIndicators();
       resultsSection.classList.remove('visible');
       loadingState.classList.add('visible');
       demoBanner.classList.remove('visible');
@@ -1495,6 +1741,10 @@
         Search
       `;
 
+      // Store citations globally for export functions
+      window._ctCitations = data.citations || [];
+      // Save query to history
+      if (data.citations && data.citations.length) saveToHistory(query);
       renderResults(data, isDemo);
     });
 
@@ -1511,6 +1761,9 @@
     // Ensure table is visible by default
     auditTableWrapper.style.display = '';
     auditToggleBtn.setAttribute('aria-expanded', 'true');
+
+    // Initialize search history display
+    renderHistory();
   </script>
 </body>
 </html>

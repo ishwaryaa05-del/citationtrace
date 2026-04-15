@@ -16,13 +16,16 @@ class CitationItem(BaseModel):
     url: str
     confidence_score: float  # 0.0 - 1.0
     verified: bool
+    nli_class: Optional[str] = None   # supported/partially-supported/low-confidence/unverified
+    source: Optional[str] = None      # OpenAlex/CrossRef/PubMed
+    cited_by_count: Optional[int] = 0
 
 
 class AuditEntry(BaseModel):
     claim: str
     source_id: int
     confidence: float
-    status: str  # "verified" | "unverified" | "low_confidence"
+    status: str  # supported / partially-supported / low-confidence / unverified
 
 
 class QueryResponse(BaseModel):
@@ -33,3 +36,4 @@ class QueryResponse(BaseModel):
     total_claims: int
     verified_claims: int
     citation_accuracy: float  # verified/total
+    sources_queried: Optional[dict] = None
