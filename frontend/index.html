@@ -1063,7 +1063,7 @@
 
     /* ---------- SOURCE 1: OPENALEX ---------- */
     async function fetchOpenAlex(query) {
-      const url = `https://api.openalex.org/works?search=${encodeURIComponent(query)}&per-page=5&sort=relevance_score:desc&select=id,title,authorships,publication_year,doi,abstract_inverted_index,primary_location,cited_by_count&mailto=citationtrace@research.tool`;
+      const url = `https://api.openalex.org/works?search=${encodeURIComponent(query)}&per-page=10&sort=relevance_score:desc&select=id,title,authorships,publication_year,doi,abstract_inverted_index,primary_location,cited_by_count&mailto=citationtrace@research.tool`;
       const resp = await fetch(url, { headers:{'Accept':'application/json'}, signal: AbortSignal.timeout(10000) });
       if (!resp.ok) return [];
       const json = await resp.json();
@@ -1084,7 +1084,9 @@
 
     /* ---------- SOURCE 2: CROSSREF ---------- */
     async function fetchCrossRef(query) {
-      const url = `https://api.crossref.org/works?query=${encodeURIComponent(query)}&rows=5&select=DOI,title,author,published-print,published-online,abstract,is-referenced-by-count,container-title&mailto=citationtrace@research.tool`;
+      // query.bibliographic = full-text search on title/abstract
+      // filter=has-abstract:true ensures we only get papers with real abstracts
+      const url = `https://api.crossref.org/works?query.bibliographic=${encodeURIComponent(query)}&rows=10&filter=has-abstract:true&select=DOI,title,author,published-print,published-online,abstract,is-referenced-by-count,container-title&mailto=citationtrace@research.tool`;
       const resp = await fetch(url, { signal: AbortSignal.timeout(10000) });
       if (!resp.ok) return [];
       const json = await resp.json();
@@ -1107,7 +1109,7 @@
     /* ---------- SOURCE 3: PUBMED ---------- */
     async function fetchPubMed(query) {
       // Step 1: search for PMIDs
-      const searchUrl = `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term=${encodeURIComponent(query)}&retmax=5&retmode=json`;
+      const searchUrl = `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term=${encodeURIComponent(query)}&retmax=10&retmode=json&sort=relevance`;
       const sResp = await fetch(searchUrl, { signal: AbortSignal.timeout(8000) });
       if (!sResp.ok) return [];
       const sJson = await sResp.json();
@@ -1177,7 +1179,7 @@
         p._rank = p._conf * 0.6 + p._citScore * 0.4;
       });
       unique.sort((a,b) => b._rank - a._rank);
-      return unique.slice(0, 8); // top 8 results
+      return unique.slice(0, 20); // up to 20 results
     }
 
     /* ---------- BUILD RESPONSE OBJECT ---------- */
@@ -1302,7 +1304,16 @@
     function renderAnswer(data) {
       resultsQueryText.textContent = data.query;
       answerText.innerHTML = renderAnswerWithCitations(data.answer);
-      statsText.textContent = `${data.verified_claims} of ${data.total_claims} claims verified`;
+      let statsMsg = `${data.verified_claims} of ${data.total_claims} papers verified`;
+      if (data.sources_queried) {
+        const sq = data.sources_queried;
+        const parts = [];
+        if (sq.openalex) parts.push(`OpenAlex: ${sq.openalex}`);
+        if (sq.crossref) parts.push(`CrossRef: ${sq.crossref}`);
+        if (sq.pubmed)   parts.push(`PubMed: ${sq.pubmed}`);
+        if (parts.length) statsMsg += ` — Sources: ${parts.join(', ')}`;
+      }
+      statsText.textContent = statsMsg;
       const pct = Math.round(data.citation_accuracy * 100);
       accuracyPill.textContent = `${pct}%`;
     }
