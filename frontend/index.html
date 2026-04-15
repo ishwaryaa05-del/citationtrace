@@ -836,7 +836,7 @@
   <!-- Demo banner (shown on fallback) -->
   <div class="demo-banner" id="demoBanner" role="status">
     <p>
-      <strong>Live results</strong> — papers retrieved in real time from <a href="https://openalex.org" target="_blank" rel="noopener" style="color:inherit;font-weight:600;">OpenAlex</a> (250M+ scholarly works, the same open corpus powering OpenScholar). Connect the CitationTrace backend for full LangSmith audit tracing.
+      <strong>Live results</strong> — queried 3 sources in parallel: <a href="https://openalex.org" target="_blank" rel="noopener" style="color:inherit;font-weight:600;">OpenAlex</a> (250M+ works) + <a href="https://www.crossref.org" target="_blank" rel="noopener" style="color:inherit;font-weight:600;">CrossRef</a> (140M+ records) + <a href="https://pubmed.ncbi.nlm.nih.gov" target="_blank" rel="noopener" style="color:inherit;font-weight:600;">PubMed</a> (37M+ articles). Deduplicated by DOI and ranked by relevance × citations.
       <a href="#" style="color:#93c5fd; margin-left:0.5em;">View API docs →</a>
     </p>
   </div>
@@ -878,7 +878,7 @@
             </button>
           </div>
           <p class="search-hint">
-            Powered by <strong>OpenScholar-style RAG</strong> + <strong>LangSmith audit tracing</strong>
+            Powered by <strong>3 scholarly APIs</strong> (OpenAlex + CrossRef + PubMed) + <strong>LangSmith audit tracing</strong>
           </p>
         </form>
       </div>
@@ -1009,48 +1009,46 @@
     'use strict';
 
     /* =============================================
-       OPENALEX LIVE PIPELINE
-       Uses OpenAlex (250M+ papers, no rate limits, CORS-enabled)
-       which is the same corpus powering OpenScholar (Nature 2026)
+       MULTI-SOURCE LIVE PIPELINE
+       Queries 3 open scholarly APIs in parallel:
+       1. OpenAlex  (250M+ works — same corpus as OpenScholar)
+       2. CrossRef  (140M+ metadata records)
+       3. PubMed    (37M+ biomedical articles via NCBI E-utilities)
+       Then merges, deduplicates by DOI, and ranks results.
        ============================================= */
 
-    /**
-     * Reconstruct abstract from OpenAlex inverted index format.
-     * OpenAlex stores abstracts as { word: [position, ...], ... }
-     */
-    function reconstructAbstract(invertedIndex) {
-      if (!invertedIndex || typeof invertedIndex !== 'object') return '';
+    /* ---------- SHARED HELPERS ---------- */
+
+    function reconstructAbstract(inv) {
+      if (!inv || typeof inv !== 'object') return '';
       try {
-        const maxPos = Math.max(...Object.values(invertedIndex).flat());
+        const maxPos = Math.max(...Object.values(inv).flat());
         const words = new Array(maxPos + 1).fill('');
-        for (const [word, positions] of Object.entries(invertedIndex)) {
+        for (const [word, positions] of Object.entries(inv))
           for (const pos of positions) words[pos] = word;
-        }
         return words.join(' ');
       } catch { return ''; }
     }
 
-    /**
-     * Compute a relevance confidence score between query and paper text.
-     * Uses TF-IDF-inspired term overlap, mapped to 0.40–0.97.
-     */
+    function stripJats(html) {
+      return (html || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    }
+
+    const STOP = new Set('the and for with from that this are was has have been its their which also both more into than but not can will may all one two any our were these those'.split(' '));
+    function tokenize(str) {
+      return str.toLowerCase().replace(/[^a-z0-9 ]/g,' ').split(/\s+/).filter(w => w.length > 2 && !STOP.has(w));
+    }
+
     function computeConfidence(query, title, abstract) {
-      const stopwords = new Set(['the','and','for','with','from','that','this','are','was','has','have','been','its','their','which','also','both','more','into','than','but','not','can','will','may','all','one','two','any','our','it\'s']);
-      const tokenize = str => str.toLowerCase().replace(/[^a-z0-9 ]/g,' ').split(/\s+/).filter(w => w.length > 2 && !stopwords.has(w));
       const qTokens = tokenize(query);
-      const docTokens = new Set(tokenize((title || '') + ' ' + (abstract || '')));
+      const docTokens = new Set(tokenize((title||'') + ' ' + (abstract||'')));
       if (!qTokens.length) return 0.60;
       let hits = 0;
       qTokens.forEach(w => { if (docTokens.has(w)) hits++; });
       const raw = hits / qTokens.length;
-      // Scale to realistic confidence range
-      const score = 0.40 + (raw * 0.52) + (Math.random() * 0.05);
-      return Math.min(0.97, parseFloat(score.toFixed(2)));
+      return Math.min(0.97, parseFloat((0.40 + raw * 0.52 + Math.random() * 0.05).toFixed(2)));
     }
 
-    /**
-     * Extract first meaningful sentence from abstract as the audit claim.
-     */
     function extractClaim(abstract) {
       if (!abstract) return 'See abstract for key findings.';
       const sentences = abstract.match(/[^.!?]+[.!?]+/g) || [];
@@ -1058,93 +1056,196 @@
       return first.length > 120 ? first.slice(0, 117) + '…' : first;
     }
 
-    /**
-     * Build a synthesized answer paragraph citing real papers by [n].
-     * Mirrors OpenScholar's approach: extract key claim per paper, weave together.
-     */
+    function snippetFrom(abstract) {
+      if (!abstract) return 'No abstract available.';
+      return abstract.length > 280 ? abstract.slice(0,277).trimEnd()+'…' : abstract;
+    }
+
+    /* ---------- SOURCE 1: OPENALEX ---------- */
+    async function fetchOpenAlex(query) {
+      const url = `https://api.openalex.org/works?search=${encodeURIComponent(query)}&per-page=5&sort=relevance_score:desc&select=id,title,authorships,publication_year,doi,abstract_inverted_index,primary_location,cited_by_count&mailto=citationtrace@research.tool`;
+      const resp = await fetch(url, { headers:{'Accept':'application/json'}, signal: AbortSignal.timeout(10000) });
+      if (!resp.ok) return [];
+      const json = await resp.json();
+      return (json.results||[]).filter(w=>w.title).map(w => {
+        const abstract = reconstructAbstract(w.abstract_inverted_index);
+        const doi = w.doi ? w.doi.replace('https://doi.org/','') : null;
+        return {
+          title: w.title,
+          authors: (w.authorships||[]).slice(0,5).map(a=>a.author?.display_name||'Unknown'),
+          year: w.publication_year||null,
+          doi, abstract,
+          url: w.doi || w.primary_location?.landing_page_url || `https://openalex.org/${(w.id||'').split('/').pop()}`,
+          cited_by_count: w.cited_by_count||0,
+          source: 'OpenAlex'
+        };
+      });
+    }
+
+    /* ---------- SOURCE 2: CROSSREF ---------- */
+    async function fetchCrossRef(query) {
+      const url = `https://api.crossref.org/works?query=${encodeURIComponent(query)}&rows=5&select=DOI,title,author,published-print,published-online,abstract,is-referenced-by-count,container-title&mailto=citationtrace@research.tool`;
+      const resp = await fetch(url, { signal: AbortSignal.timeout(10000) });
+      if (!resp.ok) return [];
+      const json = await resp.json();
+      return (json.message?.items||[]).filter(i=>(i.title||[])[0]).map(i => {
+        const dateParts = (i['published-print']||i['published-online']||{})['date-parts'];
+        const year = dateParts?.[0]?.[0] || null;
+        const abstract = stripJats(i.abstract||'');
+        const doi = i.DOI||null;
+        return {
+          title: (i.title||[])[0],
+          authors: (i.author||[]).slice(0,5).map(a=>`${a.given||''} ${a.family||''}`.trim()),
+          year, doi, abstract,
+          url: doi ? `https://doi.org/${doi}` : '',
+          cited_by_count: i['is-referenced-by-count']||0,
+          source: 'CrossRef'
+        };
+      });
+    }
+
+    /* ---------- SOURCE 3: PUBMED ---------- */
+    async function fetchPubMed(query) {
+      // Step 1: search for PMIDs
+      const searchUrl = `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term=${encodeURIComponent(query)}&retmax=5&retmode=json`;
+      const sResp = await fetch(searchUrl, { signal: AbortSignal.timeout(8000) });
+      if (!sResp.ok) return [];
+      const sJson = await sResp.json();
+      const ids = sJson.esearchresult?.idlist || [];
+      if (!ids.length) return [];
+
+      // Step 2: fetch summaries (title, authors, journal, DOI)
+      const sumUrl = `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&id=${ids.join(',')}&retmode=json`;
+      const sumResp = await fetch(sumUrl, { signal: AbortSignal.timeout(8000) });
+      if (!sumResp.ok) return [];
+      const sumJson = await sumResp.json();
+
+      // Step 3: fetch abstracts via efetch XML
+      const fetchUrl = `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=pubmed&id=${ids.join(',')}&retmode=xml`;
+      const fResp = await fetch(fetchUrl, { signal: AbortSignal.timeout(8000) });
+      const abstractMap = {};
+      if (fResp.ok) {
+        const xmlText = await fResp.text();
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
+        xmlDoc.querySelectorAll('PubmedArticle').forEach(art => {
+          const pmid = art.querySelector('PMID')?.textContent || '';
+          const abTexts = art.querySelectorAll('AbstractText');
+          const ab = Array.from(abTexts).map(n=>n.textContent).join(' ');
+          if (pmid && ab) abstractMap[pmid] = ab;
+        });
+      }
+
+      const results = [];
+      for (const uid of ids) {
+        const item = sumJson.result?.[uid];
+        if (!item || !item.title) continue;
+        let doi = '';
+        for (const aid of (item.articleids||[])) {
+          if (aid.idtype === 'doi') { doi = aid.value; break; }
+        }
+        results.push({
+          title: item.title.replace(/\.$/, ''),
+          authors: (item.authors||[]).slice(0,5).map(a=>a.name),
+          year: item.pubdate ? parseInt(item.pubdate) || null : null,
+          doi: doi || null,
+          abstract: abstractMap[uid] || '',
+          url: `https://pubmed.ncbi.nlm.nih.gov/${uid}/`,
+          cited_by_count: 0,
+          source: 'PubMed'
+        });
+      }
+      return results;
+    }
+
+    /* ---------- MERGE + DEDUP + RANK ---------- */
+    function mergeAndRank(query, ...resultArrays) {
+      const all = resultArrays.flat();
+      // Deduplicate by DOI (keep first seen — OpenAlex > CrossRef > PubMed)
+      const seen = new Set();
+      const unique = [];
+      for (const paper of all) {
+        const key = paper.doi ? paper.doi.toLowerCase() : paper.title.toLowerCase().slice(0,80);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        unique.push(paper);
+      }
+      // Score & sort by: confidence × 0.6 + log(citations+1) × 0.4
+      unique.forEach(p => {
+        p._conf = computeConfidence(query, p.title, p.abstract);
+        p._citScore = Math.log10((p.cited_by_count||0)+1) / 5; // normalize
+        p._rank = p._conf * 0.6 + p._citScore * 0.4;
+      });
+      unique.sort((a,b) => b._rank - a._rank);
+      return unique.slice(0, 8); // top 8 results
+    }
+
+    /* ---------- BUILD RESPONSE OBJECT ---------- */
     function buildSynthesizedAnswer(query, citations) {
       if (!citations.length) return `No peer-reviewed papers could be found for "${query}".`;
-      const intro = `The following synthesis is grounded in ${citations.length} peer-reviewed source${citations.length > 1 ? 's' : ''} retrieved from OpenAlex (250M+ scholarly works) for the query: "${query}".`;
+      const sourceSet = [...new Set(citations.map(c=>c.source))];
+      const intro = `The following synthesis is grounded in ${citations.length} peer-reviewed sources retrieved from ${sourceSet.join(', ')} for the query: "${query}".`;
       const body = citations.map(c => {
         const lastName = c.authors.length > 0 ? c.authors[0].split(' ').pop() : 'Authors';
         const etal = c.authors.length > 1 ? ' et al.' : '';
         const year = c.year ? ` (${c.year})` : '';
-        // Use first two sentences of abstract as the cited claim
-        const sentences = (c.abstract || '').match(/[^.!?]+[.!?]+/g) || [];
-        const claim = sentences.slice(0, 2).join(' ').trim() || c.title;
-        const claimTrunc = claim.length > 200 ? claim.slice(0, 197) + '…' : claim;
+        const sentences = (c.abstract||'').match(/[^.!?]+[.!?]+/g) || [];
+        const claim = sentences.slice(0,2).join(' ').trim() || c.title;
+        const claimTrunc = claim.length > 200 ? claim.slice(0,197)+'…' : claim;
         return `${lastName}${etal}${year} [${c.id}] ${claimTrunc}`;
       }).join(' ');
       return `${intro} ${body}`;
     }
 
     /**
-     * Main pipeline: query OpenAlex, build CitationTrace response object.
+     * MAIN PIPELINE: query all 3 sources in parallel, merge, rank, build response.
      */
-    async function fetchFromOpenAlex(query) {
-      const encoded = encodeURIComponent(query);
-      const url = [
-        'https://api.openalex.org/works',
-        `?search=${encoded}`,
-        '&per-page=5',
-        '&sort=relevance_score:desc',
-        '&select=id,title,authorships,publication_year,doi,abstract_inverted_index,primary_location,cited_by_count',
-        '&mailto=citationtrace@research.tool' // polite pool — faster responses
-      ].join('');
+    async function fetchMultiSource(query) {
+      // Fire all three in parallel
+      const [oaResults, crResults, pmResults] = await Promise.all([
+        fetchOpenAlex(query).catch(()=>[]),
+        fetchCrossRef(query).catch(()=>[]),
+        fetchPubMed(query).catch(()=>[])
+      ]);
 
-      const resp = await fetch(url, {
-        headers: { 'Accept': 'application/json' },
-        signal: AbortSignal.timeout(12000)
-      });
-      if (!resp.ok) throw new Error(`OpenAlex API error: ${resp.status}`);
-      const json = await resp.json();
-      const works = (json.results || []).filter(w => w.title);
-      if (!works.length) throw new Error('No papers found on OpenAlex for this query.');
+      const merged = mergeAndRank(query, oaResults, crResults, pmResults);
+      if (!merged.length) throw new Error('No papers found across any source.');
 
-      // Map OpenAlex works → CitationTrace CitationItem objects
-      const citations = works.map((w, idx) => {
-        const abstract = reconstructAbstract(w.abstract_inverted_index);
-        const snippet = abstract.length > 280
-          ? abstract.slice(0, 277).trimEnd() + '…'
-          : (abstract || 'No abstract available.');
-        const doi = w.doi ? w.doi.replace('https://doi.org/', '') : null;
-        const paperUrl = w.doi || (w.primary_location?.landing_page_url) ||
-          `https://openalex.org/${w.id?.split('/').pop()}`;
-        const authors = (w.authorships || []).slice(0, 5).map(a => a.author?.display_name || 'Unknown');
-        const conf = computeConfidence(query, w.title, abstract);
-        return {
-          id: idx + 1,
-          title: w.title,
-          authors,
-          year: w.publication_year || null,
-          doi,
-          abstract_snippet: snippet,
-          abstract, // full abstract for answer synthesis
-          url: paperUrl,
-          confidence_score: conf,
-          verified: conf >= 0.45,
-          cited_by_count: w.cited_by_count || 0
-        };
-      });
+      // Assign IDs and build final citation items
+      const citations = merged.map((p, idx) => ({
+        id: idx + 1,
+        title: p.title,
+        authors: p.authors,
+        year: p.year,
+        doi: p.doi,
+        abstract_snippet: snippetFrom(p.abstract),
+        abstract: p.abstract,
+        url: p.url,
+        confidence_score: p._conf,
+        verified: p._conf >= 0.45,
+        cited_by_count: p.cited_by_count,
+        source: p.source
+      }));
 
       const answer = buildSynthesizedAnswer(query, citations);
-
       const audit_trail = citations.map(c => ({
         claim: extractClaim(c.abstract),
         source_id: c.id,
         confidence: c.confidence_score,
         status: c.verified ? 'verified' : 'low_confidence'
       }));
+      const verified = citations.filter(c=>c.verified).length;
 
-      const verified = citations.filter(c => c.verified).length;
       return {
-        query,
-        answer,
-        citations,
-        audit_trail,
+        query, answer, citations, audit_trail,
         total_claims: citations.length,
         verified_claims: verified,
-        citation_accuracy: citations.length ? verified / citations.length : 0
+        citation_accuracy: citations.length ? verified / citations.length : 0,
+        sources_queried: {
+          openalex: oaResults.length,
+          crossref: crResults.length,
+          pubmed: pmResults.length
+        }
       };
     }
 
@@ -1230,7 +1331,7 @@
                   ${escapeHTML(c.title)}
                 </a>
               </div>
-              <div class="citation-authors-year">${escapeHTML(authors)} · ${c.year ? escapeHTML(String(c.year)) : 'n.d.'} · ${c.cited_by_count ? escapeHTML(String(c.cited_by_count)) + ' citations' : ''}</div>
+              <div class="citation-authors-year">${escapeHTML(authors)} · ${c.year ? escapeHTML(String(c.year)) : 'n.d.'}${c.cited_by_count ? ' · '+escapeHTML(String(c.cited_by_count))+' citations' : ''}${c.source ? ' · <span style="background:#e0e7ff;color:#3730a3;padding:1px 6px;border-radius:4px;font-size:0.7rem;font-weight:600;">'+escapeHTML(c.source)+'</span>' : ''}</div>
             </div>
           </div>
           <p class="citation-snippet">"${escapeHTML(c.abstract_snippet)}"</p>
@@ -1358,21 +1459,17 @@
         // Backend unavailable — fall through to live Semantic Scholar
       }
 
-      // 2. If backend failed, query OpenAlex directly (250M papers, no rate limits)
+      // 2. If backend failed, query all 3 sources in parallel
       if (!data) {
         try {
-          data = await fetchFromOpenAlex(query);
+          data = await fetchMultiSource(query);
           isDemo = true;
-        } catch (oaErr) {
-          // 3. Last resort: clear error message
+        } catch (err) {
           data = {
             query,
             answer: `Could not retrieve papers for "${query}". Please check your connection and try again.`,
-            citations: [],
-            audit_trail: [],
-            total_claims: 0,
-            verified_claims: 0,
-            citation_accuracy: 0
+            citations: [], audit_trail: [],
+            total_claims: 0, verified_claims: 0, citation_accuracy: 0
           };
           isDemo = true;
         }
