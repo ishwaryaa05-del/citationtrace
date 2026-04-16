@@ -12,10 +12,11 @@ app = FastAPI(
     title="CitationTrace API",
     description=(
         "A SaaS platform for verified scholarly citation retrieval. "
-        "Submit a research query and receive top papers from Semantic Scholar "
-        "with inline citation markers, confidence scores, and an audit trail."
+        "Submit a research query and receive top papers from OpenAlex, CrossRef, "
+        "and PubMed — ranked by BM25 relevance x citation count, verified with "
+        "4-class NLI scoring, and returned with a full audit trail."
     ),
-    version="1.0.0",
+    version="2.0.0",
 )
 
 app.add_middleware(
@@ -32,10 +33,12 @@ async def query(request: QueryRequest):
     """
     Retrieve and verify scholarly citations for the given research query.
 
-    - Fetches top-5 papers from Semantic Scholar
-    - Synthesises an answer with inline [N] citation markers
-    - Verifies each citation using cosine-similarity on paper abstracts
-    - Returns a full audit trail with confidence scores
+    - Queries OpenAlex, CrossRef, and PubMed in parallel (up to 10 results each)
+    - Deduplicates results by DOI
+    - Reranks using BM25 relevance x citation count
+    - Verifies each citation with 4-class NLI (Supported / Partially Supported /
+      Refuted / Unverifiable)
+    - Returns synthesised answer with inline [N] citation markers and audit trail
     """
     return await run_citation_pipeline(request.query)
 
