@@ -1015,11 +1015,12 @@
         <div style="margin-bottom:var(--space-6);">
           <div style="display:inline-flex;align-items:center;gap:var(--space-2);background:#fef3c7;border:1px solid #fde68a;border-radius:var(--radius-full);padding:2px 12px;font-size:var(--text-xs);font-weight:600;color:#d97706;letter-spacing:.04em;text-transform:uppercase;margin-bottom:var(--space-3);">Source Validator</div>
           <h2 style="font-size:var(--text-lg);font-weight:700;color:var(--color-header);margin-bottom:var(--space-2);">Validate any source</h2>
-          <p style="font-size:var(--text-sm);color:var(--color-text-muted);">Paste a URL, DOI, ISBN, or title. CitationTrace will look it up across multiple registries and evaluate its reliability, retraction status, and generate a ready-to-use APA citation.</p>
+          <p style="font-size:var(--text-sm);color:var(--color-text-muted);">Paste a URL, DOI, ISBN, title, PubMed ID — or search by author name, year, and keywords. CitationTrace looks up your source across OpenAlex, CrossRef, PubMed, and Open Library, then evaluates its reliability, retraction status, and generates a ready-to-use APA citation.</p>
         </div>
         <div style="display:flex;gap:var(--space-3);margin-bottom:var(--space-4);flex-wrap:wrap;">
-          <select id="svSourceType" style="padding:var(--space-3) var(--space-4);border:2px solid var(--color-border);border-radius:var(--radius-lg);background:#fff;font-size:var(--text-sm);color:var(--color-text);cursor:pointer;">
+          <select id="svSourceType" onchange="svUpdatePlaceholder()" style="padding:var(--space-3) var(--space-4);border:2px solid var(--color-border);border-radius:var(--radius-lg);background:#fff;font-size:var(--text-sm);color:var(--color-text);cursor:pointer;">
             <option value="auto">Auto-detect</option>
+            <option value="author">Author / Year / Title</option>
             <option value="url">Website / URL</option>
             <option value="doi">DOI</option>
             <option value="isbn">Book (ISBN)</option>
@@ -1910,6 +1911,22 @@
                   Open PageRank (for website authority)
        ============================================= */
 
+    /* --- Update placeholder text based on selected type --- */
+    function svUpdatePlaceholder() {
+      const type = document.getElementById('svSourceType').value;
+      const input = document.getElementById('svInput');
+      const placeholders = {
+        auto:   'e.g. https://example.com or 10.1038/s41586-025-10072-4 or a book title',
+        author: 'e.g. Smith 2019 sleep deprivation  or  Asai 2026 open-domain QA',
+        url:    'e.g. https://www.nature.com/articles/...',
+        doi:    'e.g. 10.1038/s41586-025-10072-4',
+        isbn:   'e.g. 9780198526490 or 978-0-19-852649-0',
+        title:  'e.g. Attention is all you need',
+        pmid:   'e.g. 33290108'
+      };
+      input.placeholder = placeholders[type] || placeholders.auto;
+    }
+
     function svDetectType(input) {
       const s = input.trim();
       if (/^10\.\d{4,}[\/\S]+/.test(s))                     return 'doi';
@@ -1924,23 +1941,215 @@
       if (!raw) { showToast('Please enter a source to validate'); return; }
       const typeSelect = document.getElementById('svSourceType').value;
       const type = typeSelect === 'auto' ? svDetectType(raw) : typeSelect;
+      // Author mode shows a disambiguation list, not a single result
       const btn = document.getElementById('svBtn');
       const resultsDiv = document.getElementById('svResults');
       btn.disabled = true; btn.textContent = 'Validating…';
       resultsDiv.style.display = 'block';
-      resultsDiv.innerHTML = `<div style="display:flex;align-items:center;gap:10px;padding:16px;background:#fff;border:1px solid var(--color-border);border-radius:var(--radius-lg);"><div class="loading-spinner" style="width:22px;height:22px;border-width:2px;"></div><span style="font-size:var(--text-sm);color:var(--color-text-muted);">Looking up source across registries…</span></div>`;
       try {
-        let result;
-        if      (type === 'doi')   result = await svValidateDOI(raw);
-        else if (type === 'isbn')  result = await svValidateISBN(raw.replace(/-/g,''));
-        else if (type === 'pmid')  result = await svValidatePMID(raw);
-        else if (type === 'url')   result = await svValidateURL(raw);
-        else                       result = await svValidateTitle(raw);
-        renderSVResult(result);
+        if (type === 'author') {
+          // svSearchByAuthor handles its own loading state
+          await svSearchByAuthor(raw, resultsDiv);
+        } else {
+          resultsDiv.innerHTML = `<div style="display:flex;align-items:center;gap:10px;padding:16px;background:#fff;border:1px solid var(--color-border);border-radius:var(--radius-lg);"><div class="loading-spinner" style="width:22px;height:22px;border-width:2px;"></div><span style="font-size:var(--text-sm);color:var(--color-text-muted);">Looking up source across registries…</span></div>`;
+          let result;
+          if      (type === 'doi')   result = await svValidateDOI(raw);
+          else if (type === 'isbn')  result = await svValidateISBN(raw.replace(/-/g,''));
+          else if (type === 'pmid')  result = await svValidatePMID(raw);
+          else if (type === 'url')   result = await svValidateURL(raw);
+          else                       result = await svValidateTitle(raw);
+          renderSVResult(result);
+        }
       } catch(e) {
         resultsDiv.innerHTML = `<div style="padding:16px;background:var(--color-error-bg);border:1px solid var(--color-error-border);border-radius:var(--radius-lg);color:var(--color-error);font-size:var(--text-sm);">Could not validate source: ${escapeHTML(e.message)}. Please check the input and try again.</div>`;
       }
       btn.disabled = false; btn.textContent = 'Validate';
+    }
+
+    /* ---------------------------------------------------------------
+       AUTHOR / YEAR / TITLE SEARCH
+       Parses free-form input like "Smith 2019 sleep deprivation"
+       Queries OpenAlex (author.search + title keywords + year filter)
+       then CrossRef (query.author + query.bibliographic),
+       then Open Library (for books) in parallel.
+       Shows up to 8 candidates as a disambiguation list.
+       User clicks one → runs full validation on that DOI/ISBN/title.
+       --------------------------------------------------------------- */
+    function svParseAuthorQuery(raw) {
+      // Extract year (4-digit number between 1900–2030)
+      const yearMatch = raw.match(/\b(19\d{2}|20[0-2]\d)\b/);
+      const year = yearMatch ? parseInt(yearMatch[1]) : null;
+      // Remove year from string, remaining words = author + title keywords
+      const withoutYear = raw.replace(yearMatch ? yearMatch[0] : '', ' ').trim();
+      // First word(s) before a space-separated capital or after comma = likely last name
+      // Heuristic: first token is the author last name, rest are title keywords
+      const tokens = withoutYear.split(/\s+/).filter(Boolean);
+      const author = tokens[0] || '';
+      const titleKeywords = tokens.slice(1).join(' ');
+      return { author, year, titleKeywords, raw: withoutYear };
+    }
+
+    async function svSearchByAuthor(raw, resultsDiv) {
+      const { author, year, titleKeywords, raw: withoutYear } = svParseAuthorQuery(raw);
+      if (!author) throw new Error('Please enter at least an author name.');
+
+      // Show searching state
+      resultsDiv.style.display = 'block';
+      resultsDiv.innerHTML = `
+        <div style="display:flex;align-items:center;gap:10px;padding:16px;background:#fff;border:1px solid var(--color-border);border-radius:var(--radius-lg);">
+          <div class="loading-spinner" style="width:20px;height:20px;border-width:2px;"></div>
+          <span style="font-size:var(--text-sm);color:var(--color-text-muted);">Searching OpenAlex, CrossRef & Open Library for <strong>${escapeHTML(raw)}</strong>…</span>
+        </div>`;
+
+      const candidates = [];
+      const seenDOIs = new Set();
+      const seenTitles = new Set();
+
+      function addCandidate(c) {
+        if (!c || !c.title) return;
+        const normTitle = c.title.toLowerCase().replace(/[^a-z0-9]/g,'').slice(0,60);
+        if (c.doi && seenDOIs.has(c.doi)) return;
+        if (seenTitles.has(normTitle)) return;
+        if (c.doi) seenDOIs.add(c.doi);
+        seenTitles.add(normTitle);
+        candidates.push(c);
+      }
+
+      // Build OpenAlex query: author.search + optional year filter + title keyword
+      try {
+        let oaUrl = `https://api.openalex.org/works?filter=author.search:${encodeURIComponent(author)}`;
+        if (year) oaUrl += `,publication_year:${year}`;
+        if (titleKeywords) oaUrl += `&search=${encodeURIComponent(titleKeywords)}`;
+        oaUrl += `&per-page=8&select=id,title,authorships,publication_year,doi,abstract_inverted_index,cited_by_count,type&mailto=citationtrace@research.tool`;
+        const oaResp = await fetch(oaUrl, {signal:AbortSignal.timeout(12000)});
+        if (oaResp.ok) {
+          const oaData = await oaResp.json();
+          for (const w of (oaData.results||[])) {
+            if (!w.title) continue;
+            addCandidate({
+              title: w.title,
+              authors: (w.authorships||[]).slice(0,4).map(a=>a.author?.display_name||'').filter(Boolean),
+              year: w.publication_year,
+              doi: (w.doi||'').replace('https://doi.org/','') || null,
+              url: w.doi || `https://openalex.org/${(w.id||'').split('/').pop()}`,
+              cited: w.cited_by_count||0,
+              type: w.type||'article',
+              source: 'OpenAlex'
+            });
+          }
+        }
+      } catch {}
+
+      // CrossRef: query.author + query.bibliographic (title keywords)
+      try {
+        let crUrl = `https://api.crossref.org/works?query.author=${encodeURIComponent(author)}`;
+        if (titleKeywords) crUrl += `&query.bibliographic=${encodeURIComponent(titleKeywords)}`;
+        if (year) crUrl += `&filter=from-pub-date:${year-1}-01-01,until-pub-date:${year+1}-12-31`;
+        crUrl += `&rows=8&select=DOI,title,author,published-print,published-online,type,is-referenced-by-count&mailto=citationtrace@research.tool`;
+        const crResp = await fetch(crUrl, {signal:AbortSignal.timeout(12000)});
+        if (crResp.ok) {
+          const crData = await crResp.json();
+          for (const i of (crData.message?.items||[])) {
+            if (!(i.title||[]).length) continue;
+            const pubYear = ((i['published-print']||i['published-online']||{})['date-parts']||[[null]])[0][0];
+            addCandidate({
+              title: (i.title||[])[0],
+              authors: (i.author||[]).slice(0,4).map(a=>`${a.given||''} ${a.family||''}`.trim()).filter(Boolean),
+              year: pubYear,
+              doi: i.DOI||null,
+              url: i.DOI ? `https://doi.org/${i.DOI}` : '',
+              cited: i['is-referenced-by-count']||0,
+              type: i.type||'article',
+              source: 'CrossRef'
+            });
+          }
+        }
+      } catch {}
+
+      // Open Library: search by author + title keywords (for books)
+      try {
+        let olQuery = author;
+        if (titleKeywords) olQuery += ' ' + titleKeywords;
+        const olUrl = `https://openlibrary.org/search.json?q=${encodeURIComponent(olQuery)}${year?`&publish_year=${year}`:''}&fields=title,author_name,first_publish_year,isbn,key,publisher&limit=5`;
+        const olResp = await fetch(olUrl, {signal:AbortSignal.timeout(10000)});
+        if (olResp.ok) {
+          const olData = await olResp.json();
+          for (const b of (olData.docs||[]).slice(0,4)) {
+            if (!b.title) continue;
+            const isbn = (b.isbn||[])[0]||null;
+            addCandidate({
+              title: b.title,
+              authors: (b.author_name||[]).slice(0,4),
+              year: b.first_publish_year||null,
+              doi: null,
+              isbn: isbn,
+              url: isbn ? `https://openlibrary.org/isbn/${isbn}` : `https://openlibrary.org${b.key||''}`,
+              cited: null,
+              type: 'book',
+              publisher: (b.publisher||[])[0]||'',
+              source: 'Open Library'
+            });
+          }
+        }
+      } catch {}
+
+      if (candidates.length === 0) {
+        resultsDiv.innerHTML = `<div style="padding:16px;background:#fef2f2;border:1px solid #fecaca;border-radius:var(--radius-lg);color:#dc2626;font-size:var(--text-sm);">No results found for <strong>${escapeHTML(raw)}</strong>. Try adding more title keywords or check the spelling of the author name.</div>`;
+        return;
+      }
+
+      // Render disambiguation list
+      const sourceColors = { OpenAlex:'#7c3aed', CrossRef:'#0369a1', 'Open Library':'#15803d' };
+      const typeIcon = { 'journal-article':'📄','book':'📚','book-chapter':'📖','conference-paper':'🎤','article':'📄' };
+      const rows = candidates.slice(0,8).map((c,i) => {
+        const authStr = c.authors.length ? c.authors.slice(0,3).join(', ') + (c.authors.length>3?' et al.':'') : 'Unknown authors';
+        const scColor = sourceColors[c.source]||'#555';
+        const icon = typeIcon[c.type] || '📄';
+        const citedBadge = c.cited != null ? `<span style="font-size:0.7rem;color:#6b7280;">${c.cited} citations</span>` : '';
+        const resolveArg = c.doi ? `doi:${c.doi}` : c.isbn ? `isbn:${c.isbn}` : `title:${c.title}`;
+        return `<div style="display:flex;align-items:flex-start;gap:12px;padding:12px 16px;border-bottom:1px solid var(--color-divider);cursor:pointer;transition:background .15s;" onmouseenter="this.style.background='#f8fafc'" onmouseleave="this.style.background=''" onclick="svResolveCandidate(${JSON.stringify(resolveArg)})">
+          <span style="font-size:1.1rem;margin-top:2px;">${icon}</span>
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:var(--text-sm);font-weight:600;color:var(--color-header);line-height:1.3;margin-bottom:3px;">${escapeHTML(c.title)}</div>
+            <div style="font-size:0.75rem;color:var(--color-text-muted);margin-bottom:4px;">${escapeHTML(authStr)}${c.year?` · ${c.year}`:''}</div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+              <span style="font-size:0.7rem;font-weight:600;color:${scColor};padding:1px 8px;border:1px solid ${scColor}30;border-radius:99px;background:${scColor}10;">${c.source}</span>
+              ${c.type ? `<span style="font-size:0.7rem;color:#6b7280;padding:1px 8px;border:1px solid #e5e7eb;border-radius:99px;">${c.type.replace(/-/g,' ')}</span>` : ''}
+              ${citedBadge}
+              ${c.doi ? `<span style="font-size:0.7rem;color:#6b7280;">DOI: ${escapeHTML(c.doi.slice(0,40))}</span>` : ''}
+            </div>
+          </div>
+          <span style="font-size:0.7rem;color:var(--color-accent);font-weight:600;white-space:nowrap;margin-top:4px;">Validate →</span>
+        </div>`;
+      }).join('');
+
+      resultsDiv.innerHTML = `
+        <div style="background:#fff;border:1px solid var(--color-border);border-radius:var(--radius-xl);overflow:hidden;box-shadow:var(--shadow-md);">
+          <div style="padding:12px 20px;background:#f0f9ff;border-bottom:1px solid #bae6fd;display:flex;align-items:center;gap:10px;">
+            <span style="font-size:0.85rem;font-weight:700;color:#0369a1;">Found ${candidates.length} result${candidates.length!==1?'s':''}</span>
+            <span style="font-size:0.8rem;color:#0369a1;">— click a result to validate it fully</span>
+          </div>
+          ${rows}
+        </div>`;
+    }
+
+    /* Called when user clicks a candidate in the disambiguation list */
+    async function svResolveCandidate(resolveArg) {
+      const resultsDiv = document.getElementById('svResults');
+      resultsDiv.innerHTML = `<div style="display:flex;align-items:center;gap:10px;padding:16px;background:#fff;border:1px solid var(--color-border);border-radius:var(--radius-lg);"><div class="loading-spinner" style="width:20px;height:20px;border-width:2px;"></div><span style="font-size:var(--text-sm);color:var(--color-text-muted);">Loading full details…</span></div>`;
+      try {
+        let result;
+        if (resolveArg.startsWith('doi:')) {
+          result = await svValidateDOI(resolveArg.slice(4));
+        } else if (resolveArg.startsWith('isbn:')) {
+          result = await svValidateISBN(resolveArg.slice(5).replace(/-/g,''));
+        } else {
+          result = await svValidateTitle(resolveArg.slice(6));
+        }
+        renderSVResult(result);
+      } catch(e) {
+        resultsDiv.innerHTML = `<div style="padding:16px;background:#fef2f2;border:1px solid #fecaca;border-radius:var(--radius-lg);color:#dc2626;font-size:var(--text-sm);">Could not load full details: ${escapeHTML(e.message)}</div>`;
+      }
     }
 
     /* --- DOI validation via CrossRef --- */
