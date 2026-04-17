@@ -184,4 +184,4 @@ All free, no API keys required for the frontend.
 
 ## License
 
-MIT
+Nanyang Technological University
