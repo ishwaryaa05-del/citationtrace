@@ -41,42 +41,43 @@
       --content-default: 960px;
       --content-wide:    1200px;
 
-      /* CitationTrace brand palette — academic deep navy + clear blue */
-      --color-header:         #1a2744;
-      --color-header-text:    #e8edf8;
-      --color-header-muted:   #8fa0c0;
-      --color-header-border:  #253459;
-      --color-accent:         #3b82f6;
-      --color-accent-hover:   #2563eb;
-      --color-accent-active:  #1d4ed8;
-      --color-accent-subtle:  #eff6ff;
-      --color-accent-border:  #bfdbfe;
+      /* CitationTrace brand palette — warm scholarly */
+      --color-header:         #1d2b38;
+      --color-header-text:    #e8e4da;
+      --color-header-muted:   #8a9baa;
+      --color-header-border:  #28394a;
+      --color-accent:         #b5611e;
+      --color-accent-hover:   #9a4f16;
+      --color-accent-active:  #7e3c0e;
+      --color-accent-subtle:  #fdf3e8;
+      --color-accent-border:  #f0cc9a;
 
-      --color-bg:              #ffffff;
-      --color-surface:         #f8fafc;
-      --color-surface-2:       #f1f5f9;
-      --color-surface-offset:  #e2e8f0;
-      --color-border:          #cbd5e1;
-      --color-divider:         #e2e8f0;
-      --color-text:            #0f172a;
-      --color-text-muted:      #475569;
-      --color-text-faint:      #94a3b8;
+      --color-bg:              #fefcf8;
+      --color-surface:         #f7f3ec;
+      --color-surface-2:       #ede8de;
+      --color-surface-offset:  #e0d9cc;
+      --color-border:          #d2c8b6;
+      --color-divider:         #ddd5c6;
+      --color-text:            #1a1610;
+      --color-text-muted:      #5a5040;
+      --color-text-faint:      #998c7c;
 
-      --color-success:         #16a34a;
-      --color-success-bg:      #f0fdf4;
-      --color-success-border:  #bbf7d0;
-      --color-warning:         #d97706;
-      --color-warning-bg:      #fffbeb;
-      --color-warning-border:  #fde68a;
-      --color-error:           #dc2626;
-      --color-error-bg:        #fef2f2;
-      --color-error-border:    #fecaca;
+      --color-success:         #2d7a47;
+      --color-success-bg:      #f2faf5;
+      --color-success-border:  #a8ddb8;
+      --color-warning:         #b5611e;
+      --color-warning-bg:      #fdf3e8;
+      --color-warning-border:  #f0cc9a;
+      --color-error:           #c0392b;
+      --color-error-bg:        #fdf2f0;
+      --color-error-border:    #f5b8b0;
 
-      --shadow-sm: 0 1px 2px rgba(15,23,42,0.06);
-      --shadow-md: 0 4px 12px rgba(15,23,42,0.08);
-      --shadow-lg: 0 12px 32px rgba(15,23,42,0.12);
+      --shadow-sm: 0 1px 3px rgba(40,25,10,0.08);
+      --shadow-md: 0 4px 14px rgba(40,25,10,0.10);
+      --shadow-lg: 0 12px 34px rgba(40,25,10,0.14);
 
       --font-body:    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      --font-heading: Georgia, 'Palatino Linotype', Palatino, 'Book Antiqua', serif;
       --font-mono:    ui-monospace, 'SF Mono', 'Cascadia Code', Consolas, monospace;
     }
 
@@ -206,7 +207,8 @@
     .logo-name {
       font-size: var(--text-lg);
       font-weight: 700;
-      letter-spacing: -0.02em;
+      font-family: var(--font-heading);
+      letter-spacing: -0.01em;
       color: #fff;
       line-height: 1;
     }
@@ -288,15 +290,14 @@
       display: inline-flex;
       align-items: center;
       gap: var(--space-2);
-      background: var(--color-accent-subtle);
-      border: 1px solid var(--color-accent-border);
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
       border-radius: var(--radius-full);
       padding: var(--space-1) var(--space-4);
       font-size: var(--text-xs);
-      font-weight: 600;
-      color: var(--color-accent-hover);
-      letter-spacing: 0.04em;
-      text-transform: uppercase;
+      font-weight: 500;
+      color: var(--color-text-muted);
+      letter-spacing: 0.01em;
     }
     .hero-eyebrow-dot {
       width: 6px; height: 6px;
@@ -310,10 +311,12 @@
     }
     .hero-heading {
       font-size: var(--text-2xl);
-      font-weight: 800;
+      font-weight: 700;
+      font-family: var(--font-heading);
       color: var(--color-header);
-      letter-spacing: -0.03em;
-      max-width: 16ch;
+      letter-spacing: -0.01em;
+      max-width: 18ch;
+      line-height: 1.15;
     }
     .hero-subheading {
       font-size: var(--text-base);
@@ -444,9 +447,7 @@
     }
     .results-query-label {
       font-size: var(--text-xs);
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
+      font-weight: 500;
       color: var(--color-text-faint);
       margin-bottom: var(--space-2);
     }
@@ -503,10 +504,9 @@
       align-items: center;
       gap: var(--space-2);
       font-size: var(--text-sm);
-      font-weight: 700;
-      color: var(--color-header);
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
+      font-weight: 600;
+      color: var(--color-text);
+      letter-spacing: 0;
     }
     .panel-title-icon {
       width: 18px; height: 18px;
@@ -557,12 +557,13 @@
       background: var(--color-accent-border);
     }
     .accuracy-pill {
-      background: var(--color-accent);
-      color: #fff;
+      background: var(--color-success-bg);
+      border: 1px solid var(--color-success-border);
+      color: var(--color-success);
       padding: 2px var(--space-3);
       border-radius: var(--radius-full);
       font-size: var(--text-xs);
-      font-weight: 700;
+      font-weight: 600;
     }
 
     /* =============================================
@@ -712,9 +713,8 @@
     .audit-table thead th {
       background: var(--color-surface);
       color: var(--color-text-muted);
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
+      font-weight: 600;
+      font-size: var(--text-xs);
       padding: var(--space-3) var(--space-4);
       text-align: left;
       border-bottom: 1px solid var(--color-divider);
@@ -791,6 +791,240 @@
       margin: 0 var(--space-2);
       opacity: 0.4;
     }
+
+    /* =============================================
+       ENHANCED STYLES — FRONTEND IMPROVEMENTS
+       ============================================= */
+
+    /* Animated hero background — warm */
+    @keyframes gradient-shift {
+      0%   { background-position: 0% 50%; }
+      50%  { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+    .query-section {
+      background: linear-gradient(-45deg, #fefcf8, #fdf5e8, #f9f4ec, #f5efe5, #fefcf8) !important;
+      background-size: 400% 400% !important;
+      animation: gradient-shift 14s ease infinite;
+      border-bottom: 1px solid var(--color-border) !important;
+    }
+
+    /* Feature pills row */
+    .feature-pills {
+      display: flex;
+      gap: var(--space-2);
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .feature-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: #fff;
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-full);
+      padding: 4px var(--space-3);
+      font-size: var(--text-xs);
+      color: var(--color-text-muted);
+      font-weight: 500;
+      box-shadow: var(--shadow-sm);
+    }
+    .feature-pill svg {
+      width: 11px;
+      height: 11px;
+      flex-shrink: 0;
+    }
+
+    /* Example query chips */
+    .examples-row {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .examples-label {
+      font-size: var(--text-xs);
+      color: var(--color-text-faint);
+      font-weight: 500;
+      white-space: nowrap;
+    }
+    .example-btn {
+      font-size: var(--text-xs);
+      padding: 3px var(--space-3);
+      border: 1px solid var(--color-accent-border);
+      border-radius: var(--radius-full);
+      background: var(--color-accent-subtle);
+      color: var(--color-accent-hover);
+      cursor: pointer;
+      font-weight: 500;
+      transition: background var(--transition-interactive), color var(--transition-interactive), border-color var(--transition-interactive);
+      white-space: nowrap;
+      max-width: 200px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .example-btn:hover {
+      background: var(--color-accent);
+      color: #fff;
+      border-color: var(--color-accent);
+    }
+
+    /* Nav links */
+    .site-nav {
+      display: flex;
+      align-items: center;
+      gap: var(--space-1);
+    }
+
+    /* Panel headers — warm gradient */
+    .panel-header {
+      background: linear-gradient(135deg, var(--color-surface) 0%, var(--color-bg) 100%) !important;
+    }
+
+    /* Citation cards: source-colored left border */
+    .citation-card[data-source="OpenAlex"] { border-left: 3px solid #7c3aed; }
+    .citation-card[data-source="CrossRef"]  { border-left: 3px solid #0369a1; }
+    .citation-card[data-source="PubMed"]    { border-left: 3px solid #dc2626; }
+
+    /* Staggered panel animation delays */
+    .panel:nth-child(1) { animation-delay: 0s; }
+    .panel:nth-child(2) { animation-delay: 0.07s; }
+    .panel:nth-child(3) { animation-delay: 0.14s; }
+
+    /* Source validator section */
+    #sourceValidatorSection {
+      padding-block: var(--space-12);
+      background: var(--color-surface);
+      border-top: 1px solid var(--color-divider);
+    }
+    .sv-container { max-width: 860px; margin-inline: auto; }
+    .sv-eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-2);
+      background: #fef3c7;
+      border: 1px solid #fde68a;
+      border-radius: var(--radius-full);
+      padding: var(--space-1) var(--space-4);
+      font-size: var(--text-xs);
+      font-weight: 600;
+      color: #d97706;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+      margin-bottom: var(--space-3);
+    }
+    .sv-heading {
+      font-size: var(--text-lg);
+      font-weight: 700;
+      font-family: var(--font-heading);
+      color: var(--color-header);
+      margin-bottom: var(--space-2);
+    }
+    .sv-description {
+      font-size: var(--text-sm);
+      color: var(--color-text-muted);
+      max-width: 68ch;
+      line-height: 1.65;
+    }
+    .sv-input-row {
+      display: flex;
+      gap: var(--space-3);
+      margin-top: var(--space-5);
+      flex-wrap: wrap;
+    }
+    .sv-select {
+      padding: var(--space-3) var(--space-4);
+      border: 2px solid var(--color-border);
+      border-radius: var(--radius-lg);
+      background: #fff;
+      font-size: var(--text-sm);
+      color: var(--color-text);
+      cursor: pointer;
+      transition: border-color var(--transition-interactive);
+    }
+    .sv-select:focus { outline: none; border-color: var(--color-accent); }
+    .sv-input {
+      flex: 1;
+      min-width: 200px;
+      padding: var(--space-3) var(--space-4);
+      border: 2px solid var(--color-border);
+      border-radius: var(--radius-lg);
+      background: #fff;
+      font-size: var(--text-sm);
+      color: var(--color-text);
+      transition: border-color var(--transition-interactive), box-shadow var(--transition-interactive);
+    }
+    .sv-input:focus {
+      outline: none;
+      border-color: var(--color-accent);
+      box-shadow: 0 0 0 3px rgba(59,130,246,0.12);
+    }
+    .sv-btn {
+      padding: var(--space-3) var(--space-6);
+      background: var(--color-accent);
+      color: #fff;
+      border: none;
+      border-radius: var(--radius-lg);
+      font-size: var(--text-sm);
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background var(--transition-interactive), box-shadow var(--transition-interactive);
+      box-shadow: 0 2px 8px rgba(59,130,246,0.3);
+    }
+    .sv-btn:hover { background: var(--color-accent-hover); box-shadow: 0 4px 14px rgba(59,130,246,0.4); }
+    .sv-btn:disabled { opacity: 0.7; cursor: not-allowed; }
+    .sv-examples {
+      display: flex;
+      gap: var(--space-2);
+      flex-wrap: wrap;
+      margin-top: var(--space-3);
+    }
+    .sv-example-chip {
+      font-size: var(--text-xs);
+      padding: 2px var(--space-3);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-full);
+      background: #fff;
+      color: var(--color-text-muted);
+      cursor: pointer;
+      font-weight: 500;
+      transition: all var(--transition-interactive);
+    }
+    .sv-example-chip:hover {
+      border-color: #fde68a;
+      background: #fef3c7;
+      color: #d97706;
+    }
+
+    /* Improved footer */
+    .site-footer {
+      background: linear-gradient(180deg, var(--color-header) 0%, #0f1929 100%) !important;
+      padding: var(--space-8) var(--space-6) !important;
+    }
+    .footer-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-4);
+      flex-wrap: wrap;
+    }
+    .footer-links {
+      display: flex;
+      gap: var(--space-5);
+    }
+    .footer-link {
+      color: var(--color-header-muted);
+      text-decoration: none;
+      font-size: var(--text-xs);
+      font-weight: 500;
+      transition: color var(--transition-interactive);
+    }
+    .footer-link:hover { color: #fff; }
+    @media (max-width: 600px) {
+      .feature-pills, .examples-row, .footer-links { display: none; }
+    }
   </style>
 </head>
 <body>
@@ -803,36 +1037,39 @@
       <a href="#" class="logo-group" aria-label="CitationTrace home">
         <!-- Inline SVG logo: stylized C + magnifying-glass trace mark -->
         <svg class="logo-icon" aria-hidden="true" width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <rect width="36" height="36" rx="8" fill="#3b82f6"/>
+          <rect width="36" height="36" rx="8" fill="#1d2b38"/>
           <!-- Book/document shape -->
-          <rect x="7" y="9" width="14" height="18" rx="2" fill="white" opacity="0.15"/>
-          <rect x="9" y="9" width="14" height="18" rx="2" fill="white" opacity="0.2"/>
-          <rect x="11" y="9" width="14" height="18" rx="2" fill="white"/>
+          <rect x="7" y="9" width="14" height="18" rx="2" fill="white" opacity="0.10"/>
+          <rect x="9" y="9" width="14" height="18" rx="2" fill="white" opacity="0.15"/>
+          <rect x="11" y="9" width="14" height="18" rx="2" fill="#fefcf8"/>
           <!-- Lines suggesting text -->
-          <rect x="13" y="13" width="8" height="1.5" rx="0.75" fill="#3b82f6" opacity="0.5"/>
-          <rect x="13" y="16" width="10" height="1.5" rx="0.75" fill="#3b82f6" opacity="0.5"/>
-          <rect x="13" y="19" width="6" height="1.5" rx="0.75" fill="#3b82f6" opacity="0.5"/>
+          <rect x="13" y="13" width="8" height="1.5" rx="0.75" fill="#b5611e" opacity="0.5"/>
+          <rect x="13" y="16" width="10" height="1.5" rx="0.75" fill="#b5611e" opacity="0.5"/>
+          <rect x="13" y="19" width="6" height="1.5" rx="0.75" fill="#b5611e" opacity="0.5"/>
           <!-- Magnifying glass -->
-          <circle cx="24" cy="24" r="5" stroke="#fff" stroke-width="2" fill="none"/>
-          <line x1="27.5" y1="27.5" x2="30" y2="30" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/>
+          <circle cx="24" cy="24" r="5" stroke="#e8e4da" stroke-width="2" fill="none"/>
+          <line x1="27.5" y1="27.5" x2="30" y2="30" stroke="#e8e4da" stroke-width="2.5" stroke-linecap="round"/>
           <!-- Citation marker -->
-          <circle cx="27" cy="14" r="4" fill="#1d4ed8"/>
+          <circle cx="27" cy="14" r="4" fill="#b5611e"/>
           <text x="27" y="17.5" text-anchor="middle" font-size="5.5" fill="white" font-weight="bold" font-family="sans-serif">[1]</text>
         </svg>
         <div class="logo-text">
           <span class="logo-name">CitationTrace</span>
-          <span class="logo-tagline">Verified Scholarly Citations, Guaranteed Provenance</span>
+          <span class="logo-tagline">Real sources, properly cited</span>
         </div>
       </a>
 
+      <nav class="site-nav" aria-label="Main navigation">
+        <a href="#main" class="nav-link">Search</a>
+        <a href="#sourceValidatorSection" class="nav-link">Check a source</a>
+      </nav>
     </div>
   </header>
 
   <!-- Demo banner (shown on fallback) -->
   <div class="demo-banner" id="demoBanner" role="status">
     <p>
-      <strong>Live results</strong> — queried 3 sources in parallel: <a href="https://openalex.org" target="_blank" rel="noopener" style="color:inherit;font-weight:600;">OpenAlex</a> (250M+ works) + <a href="https://www.crossref.org" target="_blank" rel="noopener" style="color:inherit;font-weight:600;">CrossRef</a> (140M+ records) + <a href="https://pubmed.ncbi.nlm.nih.gov" target="_blank" rel="noopener" style="color:inherit;font-weight:600;">PubMed</a> (37M+ articles). Deduplicated by DOI and ranked by relevance × citations.
-      <a href="#" style="color:#93c5fd; margin-left:0.5em;">View API docs →</a>
+      These results were pulled live from <a href="https://openalex.org" target="_blank" rel="noopener" style="color:inherit;font-weight:600;">OpenAlex</a>, <a href="https://www.crossref.org" target="_blank" rel="noopener" style="color:inherit;font-weight:600;">CrossRef</a>, and <a href="https://pubmed.ncbi.nlm.nih.gov" target="_blank" rel="noopener" style="color:inherit;font-weight:600;">PubMed</a> — three of the largest open scholarly databases in the world.
     </p>
   </div>
 
@@ -845,13 +1082,34 @@
       <div class="container container--narrow">
         <div class="hero-eyebrow">
           <span class="hero-eyebrow-dot" aria-hidden="true"></span>
-          RAG-Powered Research
+          Scholarly Research
         </div>
-        <h1 class="hero-heading">Ask a Research Question</h1>
+        <h1 class="hero-heading">What are you researching?</h1>
         <p class="hero-subheading">
-          Get synthesized answers backed by verified, high-confidence citations
-          drawn from peer-reviewed literature.
+          Ask anything. We search across millions of peer-reviewed papers and
+          bring back real sources, properly cited.
         </p>
+
+        <!-- Feature pills -->
+        <div class="feature-pills" aria-hidden="true">
+          <span class="feature-pill">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg>
+            250M+ peer-reviewed works
+          </span>
+          <span class="feature-pill">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#0369a1" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+            OpenAlex, CrossRef &amp; PubMed
+          </span>
+          <span class="feature-pill">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#2d7a47" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            DOI-verified sources
+          </span>
+          <span class="feature-pill">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#b5611e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            BibTeX &amp; APA export
+          </span>
+        </div>
+
         <form class="search-form" id="searchForm" role="search" aria-label="Research query">
           <div class="search-input-row">
             <label for="queryInput" class="visually-hidden">Research question</label>
@@ -859,7 +1117,7 @@
               type="text"
               id="queryInput"
               class="search-input"
-              placeholder="e.g., What are the effects of retrieval-augmented generation on citation accuracy?"
+              placeholder="e.g., Does sleep deprivation affect long-term memory consolidation?"
               autocomplete="off"
               spellcheck="false"
               aria-label="Research question"
@@ -873,8 +1131,15 @@
             </button>
           </div>
           <p class="search-hint">
-            Powered by <strong>3 scholarly APIs</strong> (OpenAlex + CrossRef + PubMed) + <strong>LangSmith audit tracing</strong>
+            Searches <strong>OpenAlex</strong>, <strong>CrossRef</strong>, and <strong>PubMed</strong> simultaneously — all real sources, no hallucinations
           </p>
+          <div class="examples-row" aria-label="Example queries">
+            <span class="examples-label">Try:</span>
+            <button type="button" class="example-btn" onclick="fillQuery(this)">Effects of caffeine on memory</button>
+            <button type="button" class="example-btn" onclick="fillQuery(this)">Transformer attention mechanisms</button>
+            <button type="button" class="example-btn" onclick="fillQuery(this)">CRISPR gene editing safety</button>
+            <button type="button" class="example-btn" onclick="fillQuery(this)">Climate tipping points evidence</button>
+          </div>
           <div id="historyRow" style="display:none;flex-wrap:wrap;gap:var(--space-2);justify-content:center;"></div>
         </form>
       </div>
@@ -884,7 +1149,7 @@
     <div class="loading-state" id="loadingState" aria-live="polite" aria-label="Loading results">
       <div class="container" style="display:flex;flex-direction:column;align-items:center;gap:var(--space-4)">
         <div class="loading-spinner" aria-hidden="true"></div>
-        <p style="font-size:var(--text-sm);font-weight:600;color:var(--color-text-muted);">Querying scholarly databases…</p>
+        <p style="font-size:var(--text-sm);font-weight:500;color:var(--color-text-muted);">Looking through the literature…</p>
         <div style="display:flex;flex-direction:column;gap:var(--space-2);min-width:260px;">
           <div style="display:flex;align-items:center;gap:var(--space-3);font-size:var(--text-xs);">
             <span id="srcDotOA" style="width:8px;height:8px;border-radius:50%;background:#cbd5e1;flex-shrink:0;transition:background 0.3s;"></span>
@@ -902,7 +1167,7 @@
             <span id="srcStatusPM" style="font-weight:600;color:var(--color-text-faint);">waiting…</span>
           </div>
         </div>
-        <p id="loadStepMerge" style="font-size:var(--text-xs);color:var(--color-text-faint);opacity:0;transition:opacity 0.4s;">Merging, deduplicating, and ranking results…</p>
+        <p id="loadStepMerge" style="font-size:var(--text-xs);color:var(--color-text-faint);opacity:0;transition:opacity 0.4s;">Comparing and ranking the most relevant papers…</p>
       </div>
     </div>
 
@@ -912,7 +1177,7 @@
     <section class="results-section" id="resultsSection" aria-label="Query results">
       <div class="container">
         <div class="results-header">
-          <p class="results-query-label">Query</p>
+          <p class="results-query-label">You searched for</p>
           <p class="results-query-text" id="resultsQueryText"></p>
         </div>
 
@@ -929,7 +1194,7 @@
                   <line x1="16" y1="17" x2="8" y2="17"/>
                   <polyline points="10 9 9 9 8 9"/>
                 </svg>
-                Synthesized Answer
+                Research Summary
               </div>
             </div>
             <div class="panel-body">
@@ -940,13 +1205,13 @@
                 </svg>
                 <span id="statsText"></span>
                 <div class="stats-divider" aria-hidden="true"></div>
-                <span>Citation Accuracy:</span>
+                <span>Verified:</span>
                 <span class="accuracy-pill" id="accuracyPill"></span>
               </div>
             </div>
           </div>
 
-          <!-- PANEL 2: Verified Citations -->
+          <!-- PANEL 2: Sources -->
           <div class="panel" id="citationsPanel">
             <div class="panel-header">
               <div class="panel-title">
@@ -954,25 +1219,25 @@
                   <path d="M9 12l2 2 4-4"/>
                   <path d="M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9 9 4.03 9 9z"/>
                 </svg>
-                Verified Citations
+                Sources &amp; References
               </div>
-              <button onclick="exportAllAPA()" style="font-size:var(--text-xs);padding:4px 10px;border:1px solid var(--color-border);border-radius:var(--radius-md);background:var(--color-surface);color:var(--color-text-muted);cursor:pointer;font-weight:500;">⬇ APA refs</button>
-              <button onclick="exportAllBibTeX()" style="font-size:var(--text-xs);padding:4px 10px;border:1px solid var(--color-border);border-radius:var(--radius-md);background:var(--color-surface);color:var(--color-text-muted);cursor:pointer;font-weight:500;">⬇ Export .bib</button>
+              <button onclick="exportAllAPA()" style="font-size:var(--text-xs);padding:4px 10px;border:1px solid var(--color-border);border-radius:var(--radius-md);background:var(--color-surface);color:var(--color-text-muted);cursor:pointer;font-weight:500;">Export references</button>
+              <button onclick="exportAllBibTeX()" style="font-size:var(--text-xs);padding:4px 10px;border:1px solid var(--color-border);border-radius:var(--radius-md);background:var(--color-surface);color:var(--color-text-muted);cursor:pointer;font-weight:500;">Export .bib</button>
             </div>
             <div class="panel-body">
-              <ol class="citations-list" id="citationsList" role="list" aria-label="Verified citations"></ol>
+              <ol class="citations-list" id="citationsList" role="list" aria-label="Sources and references"></ol>
             </div>
           </div>
 
-          <!-- PANEL 3: Audit Trail (full width) -->
+          <!-- PANEL 3: Evidence trail (full width) -->
           <div class="panel audit-panel" id="auditPanel">
             <div class="panel-header">
               <div class="panel-title">
                 <svg class="panel-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                  <path d="M3 3h18v18H3z" rx="2"/>
+                  <rect x="3" y="3" width="18" height="18" rx="2"/>
                   <path d="M3 9h18M9 21V9"/>
                 </svg>
-                Chain of Evidence Audit Log
+                Where each claim comes from
               </div>
               <button class="audit-toggle-btn" id="auditToggleBtn" aria-expanded="true" aria-controls="auditTableWrapper">
                 Hide
@@ -983,12 +1248,12 @@
             </div>
             <div id="auditTableWrapper" class="audit-table-wrapper">
               <div class="panel-body" style="padding:0">
-                <table class="audit-table" aria-label="Audit trail">
+                <table class="audit-table" aria-label="Source evidence trail">
                   <thead>
                     <tr>
                       <th scope="col">Claim</th>
                       <th scope="col">Source</th>
-                      <th scope="col">Confidence</th>
+                      <th scope="col">Match strength</th>
                       <th scope="col">Status</th>
                     </tr>
                   </thead>
@@ -1005,15 +1270,18 @@
     <!-- =============================================
          SOURCE VALIDATOR SECTION
          ============================================= -->
-    <section id="sourceValidatorSection" style="padding-block:var(--space-12);background:var(--color-surface);border-top:1px solid var(--color-divider);">
-      <div class="container" style="max-width:860px;">
-        <div style="margin-bottom:var(--space-6);">
-          <div style="display:inline-flex;align-items:center;gap:var(--space-2);background:#fef3c7;border:1px solid #fde68a;border-radius:var(--radius-full);padding:2px 12px;font-size:var(--text-xs);font-weight:600;color:#d97706;letter-spacing:.04em;text-transform:uppercase;margin-bottom:var(--space-3);">Source Validator</div>
-          <h2 style="font-size:var(--text-lg);font-weight:700;color:var(--color-header);margin-bottom:var(--space-2);">Validate any source</h2>
-          <p style="font-size:var(--text-sm);color:var(--color-text-muted);">Paste a URL, DOI, ISBN, title, PubMed ID — or search by author name, year, and keywords. CitationTrace looks up your source across OpenAlex, CrossRef, PubMed, and Open Library, then evaluates its reliability, retraction status, and generates a ready-to-use APA citation.</p>
+    <section id="sourceValidatorSection">
+      <div class="container sv-container">
+        <div style="margin-bottom:var(--space-2);">
+          <div class="sv-eyebrow">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg>
+            Source Validator
+          </div>
+          <h2 class="sv-heading">Is this source trustworthy?</h2>
+          <p class="sv-description">Paste in a URL, DOI, ISBN, PubMed ID, paper title, or an author name and year. We'll look it up across multiple scholarly databases, check whether it's been retracted, and give you a citation you can use straight away.</p>
         </div>
-        <div style="display:flex;gap:var(--space-3);margin-bottom:var(--space-4);flex-wrap:wrap;">
-          <select id="svSourceType" onchange="svUpdatePlaceholder()" style="padding:var(--space-3) var(--space-4);border:2px solid var(--color-border);border-radius:var(--radius-lg);background:#fff;font-size:var(--text-sm);color:var(--color-text);cursor:pointer;">
+        <div class="sv-input-row">
+          <select id="svSourceType" class="sv-select" onchange="svUpdatePlaceholder()" aria-label="Source type">
             <option value="auto">Auto-detect</option>
             <option value="author">Author / Year / Title</option>
             <option value="url">Website / URL</option>
@@ -1022,11 +1290,21 @@
             <option value="title">Paper / Article title</option>
             <option value="pmid">PubMed ID</option>
           </select>
-          <input id="svInput" type="text" placeholder="e.g. https://example.com or 10.1038/s41586-025-10072-4 or a book title"
-            style="flex:1;min-width:200px;padding:var(--space-3) var(--space-4);border:2px solid var(--color-border);border-radius:var(--radius-lg);background:#fff;font-size:var(--text-sm);color:var(--color-text);" />
-          <button id="svBtn" onclick="runSourceValidator()" style="padding:var(--space-3) var(--space-6);background:var(--color-accent);color:#fff;border:none;border-radius:var(--radius-lg);font-size:var(--text-sm);font-weight:600;cursor:pointer;">Validate</button>
+          <input id="svInput" type="text" class="sv-input" placeholder="e.g. https://example.com or 10.1038/s41586-025-10072-4 or a book title" aria-label="Source to validate" />
+          <button id="svBtn" class="sv-btn" onclick="runSourceValidator()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="display:inline;vertical-align:middle;margin-right:4px;"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg>
+            Validate
+          </button>
         </div>
-        <div id="svResults" style="display:none;"></div>
+        <div class="sv-examples" aria-label="Example sources to validate">
+          <span class="examples-label" style="font-size:var(--text-xs);color:var(--color-text-faint);font-weight:500;">Examples:</span>
+          <button type="button" class="sv-example-chip" onclick="svFillExample('10.1038/s41586-020-2649-2')">DOI: 10.1038/…</button>
+          <button type="button" class="sv-example-chip" onclick="svFillExample('9780198526490')">ISBN: 978019…</button>
+          <button type="button" class="sv-example-chip" onclick="svFillExample('33290108')">PubMed ID: 33290108</button>
+          <button type="button" class="sv-example-chip" onclick="svFillExample('Attention is all you need')">Title search</button>
+          <button type="button" class="sv-example-chip" onclick="svFillExample('Vaswani 2017 attention transformer')">Author + year</button>
+        </div>
+        <div id="svResults" style="display:none;margin-top:var(--space-4);"></div>
       </div>
     </section>
 
@@ -1036,13 +1314,23 @@
        FOOTER
        ============================================= -->
   <footer class="site-footer" role="contentinfo">
-    <p>
-      <strong>CitationTrace</strong> © 2026
-      <span class="footer-sep">|</span>
-      Built for verified scholarly provenance
-      <span class="footer-sep">|</span>
-      Powered by OpenScholar RAG + LangSmith
-    </p>
+    <div class="container">
+      <div class="footer-inner">
+        <p style="font-size:var(--text-xs);color:var(--color-header-muted);">
+          <strong style="color:var(--color-header-text);">CitationTrace</strong> © 2026
+          <span class="footer-sep">|</span>
+          Verified scholarly provenance
+          <span class="footer-sep">|</span>
+          OpenScholar RAG + LangSmith
+        </p>
+        <nav class="footer-links" aria-label="Data sources">
+          <a href="https://openalex.org" target="_blank" rel="noopener" class="footer-link">OpenAlex</a>
+          <a href="https://www.crossref.org" target="_blank" rel="noopener" class="footer-link">CrossRef</a>
+          <a href="https://pubmed.ncbi.nlm.nih.gov" target="_blank" rel="noopener" class="footer-link">PubMed</a>
+          <a href="https://openlibrary.org" target="_blank" rel="noopener" class="footer-link">Open Library</a>
+        </nav>
+      </div>
+    </div>
   </footer>
 
   <script>
@@ -1670,6 +1958,7 @@
         li.id = `citation-${c.id}`;
         li.className = 'citation-card';
         li.setAttribute('role', 'listitem');
+        if (c.source) li.dataset.source = c.source;
         li.innerHTML = `
           <div class="citation-card-top">
             <div class="citation-number" aria-hidden="true">${escapeHTML(String(c.id))}</div>
@@ -2396,6 +2685,32 @@
             </div>
           </div>
         </div>`;
+    }
+
+    /* =============================================
+       EXAMPLE QUERY / VALIDATOR HELPERS
+       ============================================= */
+    function fillQuery(btn) {
+      const input = document.getElementById('queryInput');
+      if (input) {
+        input.value = btn.textContent.trim();
+        input.focus();
+        // Highlight the input briefly
+        input.style.borderColor = 'var(--color-accent)';
+        setTimeout(() => { input.style.borderColor = ''; }, 800);
+      }
+    }
+
+    function svFillExample(text) {
+      const input = document.getElementById('svInput');
+      const select = document.getElementById('svSourceType');
+      if (!input) return;
+      input.value = text;
+      // Auto-set the type selector
+      select.value = 'auto';
+      input.focus();
+      input.style.borderColor = '#fde68a';
+      setTimeout(() => { input.style.borderColor = ''; }, 800);
     }
 
   </script>
